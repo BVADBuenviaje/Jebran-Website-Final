@@ -12,7 +12,7 @@ const UserDashboard = () => {
 
   useEffect(() => {
     const token = localStorage.getItem("access");
-    fetch("http://127.0.0.1:8000/api/accounts/users/", {
+    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/`, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
@@ -41,7 +41,7 @@ const UserDashboard = () => {
 
   const handleRoleChange = (user, newRole) => {
     const token = localStorage.getItem("access");
-    fetch(`http://127.0.0.1:8000/api/accounts/users/${user.id}/`, {
+    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${user.id}/`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",

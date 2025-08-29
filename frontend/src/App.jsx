@@ -11,7 +11,7 @@ const ProtectedDashboard = () => {
 
   React.useEffect(() => {
     if (!token) return;
-    fetch("http://127.0.0.1:8000/api/accounts/users/me/", {
+    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => res.ok ? res.json() : null)

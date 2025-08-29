@@ -30,7 +30,7 @@ const Signup = () => {
     });
 
     try {
-      await axios.post("http://127.0.0.1:8000/api/users/", formData, {
+      await axios.post(`${import.meta.env.VITE_API_URL}/users/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       navigate("/login");

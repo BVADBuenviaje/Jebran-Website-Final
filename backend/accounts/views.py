@@ -30,7 +30,16 @@ class UserViewSet(ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         kwargs['partial'] = True
-        return super().update(request, *args, **kwargs)
+        response = super().update(request, *args, **kwargs)
+        # After updating, check if role is admin and set is_staff
+        user = self.get_object()
+        if user.role == "admin" and not user.is_staff:
+            user.is_staff = True
+            user.save(update_fields=["is_staff"])
+        elif user.role != "admin" and user.is_staff:
+            user.is_staff = False
+            user.save(update_fields=["is_staff"])
+        return response
 
     @action(detail=False, methods=["get"])
     def me(self, request):

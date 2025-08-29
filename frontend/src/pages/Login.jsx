@@ -12,7 +12,7 @@ const Login = () => {
   const handleLogin = async (form) => {
     try {
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/accounts/token/",
+        `${import.meta.env.VITE_ACCOUNTS_URL}/token/`,
         form
       );
       localStorage.setItem("access", response.data.access);
@@ -20,10 +20,8 @@ const Login = () => {
 
       // Fetch user profile to check role
       const userRes = await axios.get(
-        "http://127.0.0.1:8000/api/accounts/users/me/",
-        {
-          headers: { Authorization: `Bearer ${response.data.access}` },
-        }
+        `${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`,
+        { headers: { Authorization: `Bearer ${response.data.access}` } }
       );
       const role = userRes.data.role;
 
