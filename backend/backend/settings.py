@@ -147,6 +147,11 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in env("CORS_ORIGINS", default="").split
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True  # needed if you send cookies from React
 
+AUTHENTICATION_BACKENDS = [
+    'accounts.authentication.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

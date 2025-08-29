@@ -7,33 +7,72 @@ const Home = () => {
 
   useEffect(() => {
     const token = localStorage.getItem("access");
-    if (!token) return;
+    if (!token) {
+      setRole(null);
+      return;
+    }
     fetch("http://127.0.0.1:8000/api/accounts/users/me/", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && data.role) setRole(data.role);
-      });
+        else setRole(null);
+      })
+      .catch(() => setRole(null));
   }, []);
 
-  // If reseller tries to access /dashboard, redirect to home
   useEffect(() => {
     if (role === "reseller" && window.location.pathname === "/dashboard") {
       navigate("/");
     }
   }, [role, navigate]);
 
+  const handleLogout = () => {
+    localStorage.removeItem("access");
+    localStorage.removeItem("refresh");
+    setRole(null);
+    navigate("/login");
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
-      <h1 className="text-3xl font-bold mb-6">Welcome Home!</h1>
-      {role === "admin" && (
-        <Link
-          to="/dashboard"
-          className="px-6 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
-        >
-          Go to Dashboard
-        </Link>
+      {role ? (
+        <>
+          <h1 className="text-3xl font-bold mb-6">Welcome Home!</h1>
+          {role === "admin" && (
+            <Link
+              to="/dashboard"
+              className="px-6 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors mb-4"
+            >
+              Go to Dashboard
+            </Link>
+          )}
+          <button
+            onClick={handleLogout}
+            className="px-6 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+          >
+            Logout
+          </button>
+        </>
+      ) : (
+        <>
+          <h1 className="text-3xl font-bold mb-6">Welcome to Jebran Website!</h1>
+          <div className="flex gap-4">
+            <Link
+              to="/login"
+              className="px-6 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
+            >
+              Login
+            </Link>
+            <Link
+              to="/signup"
+              className="px-6 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+            >
+              Signup
+            </Link>
+          </div>
+        </>
       )}
     </div>
   );

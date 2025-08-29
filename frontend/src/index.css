@@ -6,3 +6,32 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Modern scrollbar for signup form with #753f0d color */
+.signup-scrollbar::-webkit-scrollbar {
+  width: 4px; /* Really thin scrollbar */
+  background: transparent;
+}
+
+.signup-scrollbar::-webkit-scrollbar-thumb {
+  background: #753f0d;
+  border-radius: 8px;
+  border: 1px solid #753f0d;
+}
+
+.signup-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #5c320a; /* Slightly darker for hover */
+}
+
+.signup-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.signup-scrollbar::-webkit-scrollbar-button {
+  display: none; /* Remove top/bottom arrows */
+}
+
+.signup-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #753f0d transparent;
+}
