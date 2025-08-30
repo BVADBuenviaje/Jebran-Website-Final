@@ -15,6 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
             "proof_of_business",
             "date_joined",        # <-- Add this
             "last_active",        # <-- Add this
+             "is_blocked",  # <-- Add this line
         ]
         read_only_fields = ["date_joined", "last_active"]
 

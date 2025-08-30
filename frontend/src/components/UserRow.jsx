@@ -10,10 +10,14 @@ const ROLE_OPTIONS = [
   { label: "Customer", value: "customer" },
 ];
 
-const UserRow = ({ user, onRoleChange, onDelete }) => {
+const UserRow = ({ user, onRoleChange, onBlock }) => {
   const [showRoleModal, setShowRoleModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showUnblockModal, setShowUnblockModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState(user.role);
+
+  // Get current logged-in username from localStorage
+  const currentUsername = localStorage.getItem("username");
 
   const handleRoleSelect = (e) => {
     setSelectedRole(e.target.value);
@@ -27,16 +31,22 @@ const UserRow = ({ user, onRoleChange, onDelete }) => {
     }
   };
 
-  const handleDelete = () => setShowDeleteModal(true);
+  const handleBlock = () => setShowBlockModal(true);
+  const handleUnblock = () => setShowUnblockModal(true);
 
-  const confirmDelete = () => {
-    setShowDeleteModal(false);
-    onDelete(user);
+  const confirmBlock = () => {
+    setShowBlockModal(false);
+    onBlock({ ...user, is_blocked: true });
+  };
+
+  const confirmUnblock = () => {
+    setShowUnblockModal(false);
+    onBlock({ ...user, is_blocked: false });
   };
 
   return (
     <>
-      <div className="flex items-center pl-5 pr-3 h-13 bg-gray-200 rounded-lg text-yellow-900 shadow">
+      <div className={`flex items-center pl-5 pr-3 h-13 rounded-lg text-yellow-900 shadow ${user.is_blocked ? "opacity-50 bg-gray-300" : "bg-gray-200"}`}>
         <span className="flex-1 font-semibold truncate overflow-hidden">{user.username}</span>
         <Divider />
         <span className="flex-1 truncate overflow-hidden">{user.shop_name}</span>
@@ -47,8 +57,11 @@ const UserRow = ({ user, onRoleChange, onDelete }) => {
           <select
             value={selectedRole}
             onChange={handleRoleSelect}
-            className="bg-gray-100 text-yellow-900 rounded-full px-6 py-2 border-none focus:outline-none shadow-sm"
+            className={`bg-gray-100 text-yellow-900 rounded-full px-6 py-2 border-none focus:outline-none shadow-sm ${
+              (user.is_blocked || user.username === currentUsername) ? "opacity-50 cursor-not-allowed" : ""
+            }`}
             style={{ minWidth: "120px" }}
+            disabled={user.is_blocked || user.username === currentUsername}
           >
             {ROLE_OPTIONS.map((role) => (
               <option key={role.value} value={role.value}>
@@ -63,17 +76,24 @@ const UserRow = ({ user, onRoleChange, onDelete }) => {
         </span>
         <Divider />
         <span className="w-32 flex items-center justify-center gap-2">
-          {user.role !== "admin" && (
+          {user.role !== "admin" && !user.is_blocked && (
             <button
-              onClick={handleDelete}
-              className="rounded-full bg-yellow-900 p-1 flex items-center justify-center shadow hover:bg-yellow-800 transition-colors"
-              title="Remove User"
-              style={{ width: "28px", height: "28px" }}
+              onClick={handleBlock}
+              className="rounded-full bg-yellow-900 px-4 py-1 flex items-center justify-center shadow hover:bg-yellow-800 transition-colors text-white"
+              title="Block User"
+              style={{ minWidth: "60px", height: "28px" }}
             >
-              {/* X Icon */}
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              Block
+            </button>
+          )}
+          {user.role !== "admin" && user.is_blocked && (
+            <button
+              onClick={handleUnblock}
+              className="rounded-full bg-green-700 px-4 py-1 flex items-center justify-center shadow hover:bg-green-800 transition-colors text-white"
+              title="Unblock User"
+              style={{ minWidth: "80px", height: "28px" }}
+            >
+              Unblock
             </button>
           )}
         </span>
@@ -89,14 +109,7 @@ const UserRow = ({ user, onRoleChange, onDelete }) => {
             <div className="flex justify-center gap-4">
               <button
                 type="button"
-                className="w-24 px-4 py-2 border-2 border-yellow-900 text-white bg-yellow-900 rounded focus:outline-none focus:ring-2 hover:bg-yellow-800 hover:border-yellow-800 transition-colors"
-                onClick={confirmRoleChange}
-              >
-                Yes
-              </button>
-              <button
-                type="button"
-                className="w-24 px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+                className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
                 onClick={() => {
                   setShowRoleModal(false);
                   setSelectedRole(user.role);
@@ -104,32 +117,66 @@ const UserRow = ({ user, onRoleChange, onDelete }) => {
               >
                 Cancel
               </button>
+              <button
+                type="button"
+                className="min-w-[120px] px-4 py-2 border-2 border-yellow-900 text-white bg-yellow-900 rounded focus:outline-none focus:ring-2 hover:bg-yellow-800 hover:border-yellow-800 transition-colors"
+                onClick={confirmRoleChange}
+              >
+                Yes
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Modal */}
-      {showDeleteModal && (
+      {/* Block Modal */}
+      {showBlockModal && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
             <p className="text-lg font-semibold mb-4 text-center">
-              Are you sure you want to remove {user.username} from the system?
+              Are you sure you want to block {user.username}?
             </p>
             <div className="flex justify-center gap-4">
               <button
                 type="button"
-                className="w-24 px-4 py-2 border-2 border-yellow-900 text-white bg-yellow-900 rounded focus:outline-none focus:ring-2 hover:bg-yellow-800 hover:border-yellow-800 transition-colors"
-                onClick={confirmDelete}
+                className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+                onClick={() => setShowBlockModal(false)}
               >
-                Yes
+                Cancel
               </button>
               <button
                 type="button"
-                className="w-24 px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
-                onClick={() => setShowDeleteModal(false)}
+                className="min-w-[120px] px-4 py-2 border-2 border-yellow-900 text-white bg-yellow-900 rounded focus:outline-none focus:ring-2 hover:bg-yellow-800 hover:border-yellow-800 transition-colors"
+                onClick={confirmBlock}
+              >
+                Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unblock Modal */}
+      {showUnblockModal && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
+            <p className="text-lg font-semibold mb-4 text-center">
+              Are you sure you want to unblock {user.username}?
+            </p>
+            <div className="flex justify-center gap-4">
+              <button
+                type="button"
+                className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+                onClick={() => setShowUnblockModal(false)}
               >
                 Cancel
+              </button>
+              <button
+                type="button"
+                className="min-w-[120px] px-4 py-2 border-2 border-green-700 text-white bg-green-700 rounded focus:outline-none focus:ring-2 hover:bg-green-800 hover:border-green-800 transition-colors"
+                onClick={confirmUnblock}
+              >
+                Unblock
               </button>
             </div>
           </div>

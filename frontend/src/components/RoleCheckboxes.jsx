@@ -5,6 +5,7 @@ const RoleCheckboxes = ({ selectedRoles, onChange }) => {
     { label: "Admins", value: "admin" },
     { label: "Resellers", value: "reseller" },
     { label: "Customers", value: "customer" },
+    { label: "Blocked", value: "blocked" }, // <-- Add this line
   ];
 
   const handleCheckboxChange = (role) => {
@@ -22,7 +23,9 @@ const RoleCheckboxes = ({ selectedRoles, onChange }) => {
             onClick={() => handleCheckboxChange(role.value)}
             className={`w-32 px-3 py-1 rounded-full border-2 border-white transition-colors duration-200 font-semibold cursor-pointer text-sm
               ${active
-                ? "bg-gray-200 text-yellow-900"
+                ? role.value === "blocked"
+                  ? "bg-red-200 text-red-900"
+                  : "bg-gray-200 text-yellow-900"
                 : "bg-transparent text-gray-200"
               }`}
           >

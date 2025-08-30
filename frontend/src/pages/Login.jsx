@@ -6,6 +6,7 @@ import LoginForm from "../components/LoginForm";
 const Login = () => {
   const [error, setError] = useState("");
   const [pendingModal, setPendingModal] = useState(false);
+  const [blockedModal, setBlockedModal] = useState(false);
   const [loginErrorModal, setLoginErrorModal] = useState(false);
   const navigate = useNavigate();
 
@@ -18,12 +19,21 @@ const Login = () => {
       localStorage.setItem("access", response.data.access);
       localStorage.setItem("refresh", response.data.refresh);
 
-      // Fetch user profile to check role
+      // Fetch user profile to check role and blocked status
       const userRes = await axios.get(
         `${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`,
         { headers: { Authorization: `Bearer ${response.data.access}` } }
       );
       const role = userRes.data.role;
+      const isBlocked = userRes.data.is_blocked;
+
+      // Save username for dashboard self-role protection
+      localStorage.setItem("username", userRes.data.username);
+
+      if (isBlocked) {
+        setBlockedModal(true);
+        return;
+      }
 
       if (role !== "reseller" && role !== "admin") {
         setPendingModal(true);
@@ -33,6 +43,9 @@ const Login = () => {
       navigate("/");
     } catch (err) {
       let msg = err.response?.data?.detail || err.response?.data || "Login failed.";
+      if (typeof msg !== "string" && msg) {
+        msg = msg.detail || JSON.stringify(msg);
+      }
       if (
         typeof msg === "string" &&
         (msg.toLowerCase().includes("no active account found") ||
@@ -41,8 +54,26 @@ const Login = () => {
         setLoginErrorModal(true);
         msg = ""; // Don't show inline error
       }
+      // Handle blocked user error from backend
+      if (
+        typeof msg === "string" &&
+        msg.toLowerCase().includes("blocked")
+      ) {
+        setBlockedModal(true);
+        msg = "";
+      }
       setError(msg);
     }
+  };
+
+  const handlePendingModalHome = () => {
+    setPendingModal(false);
+    navigate("/");
+  };
+
+  const handleBlockedModalHome = () => {
+    setBlockedModal(false);
+    navigate("/");
   };
 
   return (
@@ -58,15 +89,47 @@ const Login = () => {
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
               <p className="text-lg font-semibold mb-4 text-center">
-                Your account is pending verification. Please wait for an email confirmation.
+                Your account is pending verification. Please wait for an email confirmation. Go back to home page?
               </p>
-              <div className="flex justify-center">
+              <div className="flex justify-center gap-4">
                 <button
                   type="button"
-                  className="w-24 px-4 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
+                  className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
                   onClick={() => setPendingModal(false)}
                 >
-                  OK
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="min-w-[120px] px-4 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
+                  onClick={handlePendingModalHome}
+                >
+                  Go to Home
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {blockedModal && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
+              <p className="text-lg font-semibold mb-4 text-center">
+                Your account has been restricted and you cannot log in. Please contact support if you believe this is a mistake.
+              </p>
+              <div className="flex justify-center gap-4">
+                <button
+                  type="button"
+                  className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+                  onClick={() => setBlockedModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="min-w-[120px] px-4 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
+                  onClick={handleBlockedModalHome}
+                >
+                  Go to Home
                 </button>
               </div>
             </div>

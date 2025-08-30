@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
+from rest_framework import serializers
 
 User = get_user_model()
 
@@ -31,7 +32,6 @@ class UserViewSet(ModelViewSet):
     def update(self, request, *args, **kwargs):
         kwargs['partial'] = True
         response = super().update(request, *args, **kwargs)
-        # After updating, check if role is admin and set is_staff
         user = self.get_object()
         if user.role == "admin" and not user.is_staff:
             user.is_staff = True
@@ -64,6 +64,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         user = self.user
+        if getattr(user, "is_blocked", False):  # <-- Prevent blocked users from logging in
+            raise serializers.ValidationError("This account is blocked.")
         user.last_active = timezone.now()
         user.save(update_fields=["last_active"])
         return data

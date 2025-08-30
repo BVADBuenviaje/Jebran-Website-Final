@@ -34,5 +34,7 @@ class User(AbstractUser):
         null=True
     )
 
+    is_blocked = models.BooleanField(default=False)  # <-- Add this line
+
     def __str__(self):
         return self.username or self.email or f"User {self.pk}"
