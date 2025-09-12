@@ -1,0 +1,130 @@
+.navbar {
+  position: fixed;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width:40%;
+  max-width: 1000px;
+  border-radius: 100px;
+  border: 2px solid var(--secondary-brown);
+  background: var(--secondary-brown);
+  padding: 0.5rem 1.5rem;
+  box-shadow: 0 4px 24px var(--shadow-orange);
+  transition: transform 0.3s;
+  z-index: 100;
+}
+
+.navbar-list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0rem;
+  color: var(--text-light);
+  font-family: var(--font-header);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.navbar-logo {
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-right: 12rem;
+}
+.navbar-logo:hover {
+  opacity: 0.8;
+}
+.navbar-logo img {
+  width: 36px;
+  height: 36px;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  color: var(--text-light);
+}
+
+.navbar-link {
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-family: var(--font-header);
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  margin-top: 4px;
+  opacity: 0.9;
+  font-weight: 570;
+}
+.navbar-link.active {
+  opacity: 1;
+  font-weight: bold;
+}
+.navbar-link:hover {
+  opacity: 0.8;
+  font-weight: 800;
+}
+
+.outer-icons-right {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5rem;
+  /* margin-left: auto; Push to the right */
+  margin-left: 12vh;
+}
+.navbar-cart {
+  cursor: pointer;
+  font-family: var(--font-header);
+  font-size: 1rem;
+  transition: opacity 0.2s;
+}
+.navbar-cart img {
+  width: 30px;
+  height: 30px;
+}
+
+.navbar-user {
+  position: relative;
+}
+.navbar-user img {
+  width: 27px;
+  height: 27px;
+  cursor: pointer;
+}
+
+.navbar-user-dropdown {
+  position: absolute;
+  right: 0;
+  margin-top: 0.5rem;
+  width: 10rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 24px var(--shadow-orange);
+  background: var(--background-light);
+  border: 2px solid var(--primary-orange);
+  color: var(--secondary-brown);
+  font-family: var(--font-header);
+  font-size: 1.3rem;
+  font-weight: 300;
+  letter-spacing: 1px;
+  padding: 0.5rem 0;
+  z-index: 200;
+}
+
+.navbar-user-dropdown-btn {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  transition: background 0.2s, color 0.2s;
+}
+.navbar-user-dropdown-btn:hover {
+  background: var(--primary-orange);
+  color: var(--text-light);
+}

@@ -199,17 +199,17 @@ const Home = () => {
       {/* <section className="features">
         <div className="features-container">
           <div className="feature">
-            <div className="feature-icon">🍜</div>
+            <div className="feature-icon"></div>
             <h3>Fresh Ingredients</h3>
             <p>We use only the freshest ingredients sourced daily from local suppliers</p>
           </div>
           <div className="feature">
-            <div className="feature-icon">⚡</div>
+            <div className="feature-icon"></div>
             <h3>Quick Service</h3>
             <p>Fast preparation without compromising on quality and taste</p>
           </div>
           <div className="feature">
-            <div className="feature-icon">❤️</div>
+            <div className="feature-icon"></div>
             <h3>Made with Love</h3>
             <p>Every bowl is crafted with care and traditional cooking methods</p>
           </div>
