@@ -4,6 +4,8 @@ import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import UserDashboard from "./pages/UserDashboard";
 import Home from "./pages/Home";
+import Navbar from "./components/NavBar";
+
 
 const ProtectedDashboard = () => {
   const token = localStorage.getItem("access");
@@ -29,6 +31,7 @@ const ProtectedDashboard = () => {
 function App() {
   return (
     <Router>
+      <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
