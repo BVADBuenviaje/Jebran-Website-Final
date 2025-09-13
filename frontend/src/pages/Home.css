@@ -479,13 +479,13 @@
 }
 
 /* Remove Tailwind from hr */
-.hr1,
+/* .hr1,
 .hr2 {
   border: none;
   border-top: 1px solid var(--primary-orange);
   margin: 2rem 0;
   width: 100%;
-}
+} */
 
 /* Remove Tailwind from other sections as needed... */
 

@@ -18,7 +18,7 @@
     /* -webkit-background-clip: text; */
     background-clip: text;
     color: transparent;
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: bold;
     font-family: "Buda", serif;
       justify-content: center; /* Center elements horizontally */
@@ -28,9 +28,17 @@
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
+#hr1,
+#hr2 {
+  /* border: #ffb286; */
+  border-top: 100px solid var(--primary-orange);
+  margin: 2rem 0;
+  width: 100%;
+}
   .sectionTitle h2 {
     margin: 0;
-    white-space: nowrap;
+    /* white-space: nowrap; */
     font-size: inherit;
     font-weight: inherit;
   }

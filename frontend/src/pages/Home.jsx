@@ -124,9 +124,9 @@ const Home = () => {
         className="products animate-fadeInUp animate-delay-2"
         data-aos="fade-up" data-aos-delay="100"
       >
-        <hr className="hr1" />
+        {/* <hr className="hr1" /> */}
         <ScrollingTitle text="Jebran" repetitions={2000} />
-        <hr className="hr2" />
+        {/* <hr className="hr2" /> */}
         <div className="products-container">
           <h2 className="products-title">Products</h2>
           <div className="products-grid">

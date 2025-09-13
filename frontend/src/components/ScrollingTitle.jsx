@@ -6,14 +6,16 @@ const ScrollingTitle = ({ text, repetitions = 2000, speed = 10000 }) => {
   const repeatedText = Array(repetitions).fill(text);
 
   return (
+    
     <div
       className="scroller"
-      style={{
-        overflow: "hidden",
-        whiteSpace: "nowrap",
-        width: "100%",
-      }}
+      // style={{
+      //   overflow: "hidden",
+      //   whiteSpace: "nowrap",
+      //   width: "100%",
+      // }}
     >
+      <hr className="hr1"/>
       <div
         className="sectionTitle"
         style={{
@@ -27,6 +29,7 @@ const ScrollingTitle = ({ text, repetitions = 2000, speed = 10000 }) => {
           </h2>
         ))}
       </div>
+      <hr className="hr2"/>
     </div>
   );
 };
