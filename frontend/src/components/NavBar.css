@@ -13,7 +13,7 @@
   transition: transform 0.3s;
   z-index: 100;
 }
-
+/* #TODO: Add signup button */
 .navbar-list {
   display: flex;
   align-items: center;

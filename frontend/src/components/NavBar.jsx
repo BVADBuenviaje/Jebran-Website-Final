@@ -170,6 +170,7 @@ export default function Navbar({ role }) {
                       Signup
                     </button>
                   </>
+                  //#TODO: Add signup button
                 )}
               </div>
             )}
