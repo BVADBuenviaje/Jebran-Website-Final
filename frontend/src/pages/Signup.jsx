@@ -43,7 +43,7 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[url('/background.jpg')] bg-cover bg-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "#f89c4e" }}>
       <SignupForm onSubmit={handleSignup} error={error} setError={setError}>
         <p className="mt-4 text-center">
           Already have an account? <Link to="/login" className="text-blue-500 underline">Login here</Link>

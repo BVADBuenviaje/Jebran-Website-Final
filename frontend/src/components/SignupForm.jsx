@@ -18,6 +18,8 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [existsModal, setExistsModal] = useState(false);
+  const [existsMessage, setExistsMessage] = useState("");
 
   // Validation for all fields
   const allValid =
@@ -50,11 +52,10 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
     if (setError) setError(""); // Clear error on change
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitted(true);
 
-    // Show error if password format is invalid
     if (!passwordValid) {
       if (typeof setError === "function") {
         setError("Password must be at least 8 characters and contain both letters and numbers.");
@@ -62,11 +63,37 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
       return;
     }
 
-    // Only show confirmation modal if all fields are valid and password is valid
+    // Check if username or email exists
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/users/check/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: form.username, email: form.email }),
+      });
+      const data = await res.json();
+      if (data.username_exists && data.email_exists) {
+        setExistsMessage("This username and email already exist.");
+        setExistsModal(true);
+        return;
+      }
+      if (data.username_exists) {
+        setExistsMessage("The username already exists.");
+        setExistsModal(true);
+        return;
+      }
+      if (data.email_exists) {
+        setExistsMessage("The email already exists.");
+        setExistsModal(true);
+        return;
+      }
+    } catch (err) {
+      setError("Could not validate username/email. Please try again.");
+      return;
+    }
+
     if (allValid && passwordValid && !error) {
       setShowConfirm(true);
     }
-    // Otherwise, errors will show as usual
   };
 
   const handleConfirm = () => {
@@ -82,16 +109,20 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
     <form
       onSubmit={handleSubmit}
       encType="multipart/form-data"
-      className="min-h-screen flex flex-col justify-center max-w-md w-full bg-white p-8 shadow-md mx-auto"
+      className="min-h-screen flex flex-col justify-center max-w-md w-full bg-white p-8 shadow-md space-y-4 mx-auto"
+      style={{
+          border: "none", // No border
+          borderRadius: "1rem", 
+          boxShadow: "0 0 60px 0 rgba(248,156,78,0.25), 0 0 60px 0 rgba(248,156,78,0.25) inset",
+        }}
     >
-      <h1 className="text-2xl font-bold font-montserrat text-center mb-6 tracking-widest text-orange-900">
+      <h1 className="text-2xl font-bold font-montserrat text-center mb-6 tracking-widest" style={{ color: "#f89c4e" }}>
         SIGN UP
       </h1>
 
-      {/* Scrollable fields container */}
       <div className="flex-1 overflow-y-auto space-y-4 signup-scrollbar" style={{ maxHeight: "650px" }}>
         <div>
-          <label htmlFor="full_name" className="block mb-1 font-medium text-gray-700">
+          <label htmlFor="full_name" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Full Name
           </label>
           <input
@@ -100,7 +131,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             placeholder="Full Name"
             value={form.full_name}
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+            style={{
+              borderColor: "#f89c4e",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           {submitted && !form.full_name && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -109,7 +145,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
           )}
         </div>
         <div>
-          <label htmlFor="email" className="block mb-1 font-medium text-gray-700">
+          <label htmlFor="email" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Email
           </label>
           <input
@@ -119,7 +155,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             placeholder="Email"
             value={form.email}
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+            style={{
+              borderColor: "#f89c4e",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           {submitted && !form.email && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -133,7 +174,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
           )}
         </div>
         <div>
-          <label htmlFor="username" className="block mb-1 font-medium text-gray-700">
+          <label htmlFor="username" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Username
           </label>
           <input
@@ -142,7 +183,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             placeholder="Username"
             value={form.username}
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+            style={{
+              borderColor: "#f89c4e",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           {submitted && !form.username && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -151,7 +197,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
           )}
         </div>
         <div>
-          <label htmlFor="shop_name" className="block mb-1 font-medium text-gray-700">
+          <label htmlFor="shop_name" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Shop Name
           </label>
           <input
@@ -160,7 +206,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             placeholder="Shop Name"
             value={form.shop_name}
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+            style={{
+              borderColor: "#f89c4e",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           {submitted && !form.shop_name && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -169,7 +220,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
           )}
         </div>
         <div>
-          <label htmlFor="shop_address" className="block mb-1 font-medium text-gray-700">
+          <label htmlFor="shop_address" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Shop Address
           </label>
           <input
@@ -178,7 +229,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             placeholder="Shop Address"
             value={form.shop_address}
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+            style={{
+              borderColor: "#f89c4e",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           {submitted && !form.shop_address && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -188,7 +244,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
         </div>
         <div className="flex gap-4">
           <div className="w-1/2">
-            <label htmlFor="password" className="block mb-1 font-medium text-gray-700">
+            <label htmlFor="password" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
               Password
             </label>
             <div className="relative">
@@ -199,11 +255,17 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
                 placeholder="Password"
                 value={form.password}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer pr-10"
+                className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer pr-10"
+                style={{
+                  borderColor: "#f89c4e",
+                  background: "#fffbe8",
+                  color: "#bb6653",
+                }}
               />
               <button
                 type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                style={{ color: "#bb6653" }}
                 onClick={() => setShowPassword((prev) => !prev)}
                 tabIndex={-1}
               >
@@ -227,7 +289,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             )}
           </div>
           <div className="w-1/2">
-            <label htmlFor="confirm_password" className="block mb-1 font-medium text-gray-700">
+            <label htmlFor="confirm_password" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
               Confirm Password
             </label>
             <div className="relative">
@@ -238,11 +300,17 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
                 placeholder="Confirm Password"
                 value={form.confirm_password}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer pr-10"
+                className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer pr-10"
+                style={{
+                  borderColor: "#f89c4e",
+                  background: "#fffbe8",
+                  color: "#bb6653",
+                }}
               />
               <button
                 type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                style={{ color: "#bb6653" }}
                 onClick={() => setShowConfirmPassword((prev) => !prev)}
                 tabIndex={-1}
               >
@@ -272,7 +340,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
           </div>
         )}
         <div>
-          <label htmlFor="contact_number" className="block mb-1 font-medium text-gray-700">
+          <label htmlFor="contact_number" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Contact Number
           </label>
           <input
@@ -281,7 +349,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             placeholder="Contact Number"
             value={form.contact_number}
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+            style={{
+              borderColor: "#f89c4e",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           {submitted && !form.contact_number && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -290,7 +363,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
           )}
         </div>
         <div>
-          <label htmlFor="proof_of_business" className="block mb-1 font-medium text-gray-700">
+          <label htmlFor="proof_of_business" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Proof of Business
           </label>
           <input
@@ -299,7 +372,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             type="file"
             accept="image/*"
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+            style={{
+              borderColor: "#f89c4e",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           {submitted && !form.proof_of_business && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -321,14 +399,30 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             <div className="flex justify-center gap-4">
               <button
                 type="button"
-                className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+                className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                style={{
+                  background: "#b95700", // darker orange for Cancel
+                  color: "#fffbe8",
+                  border: "none",
+                  borderRadius: "2rem",
+                }}
+                onMouseEnter={e => (e.target.style.background = "#a04a00")}
+                onMouseLeave={e => (e.target.style.background = "#b95700")}
                 onClick={handleCancel}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="min-w-[120px] px-4 py-2 border-2 border-yellow-900 text-white bg-yellow-900 rounded focus:outline-none focus:ring-2 hover:bg-yellow-800 hover:border-yellow-800 transition-colors"
+                className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                style={{
+                  background: "#f89c4e", // regular orange for Yes
+                  color: "#fffbe8",
+                  border: "none",
+                  borderRadius: "2rem",
+                }}
+                onMouseEnter={e => (e.target.style.background = "#f08b51")}
+                onMouseLeave={e => (e.target.style.background = "#f89c4e")}
                 onClick={handleConfirm}
               >
                 Yes
@@ -338,9 +432,44 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
         </div>
       )}
 
+      {existsModal && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
+            <p className="text-lg font-semibold mb-4 text-center">
+              {existsMessage}
+            </p>
+            <div className="flex justify-center">
+              <button
+                type="button"
+                className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                style={{
+                  background: "#f89c4e",
+                  color: "#fffbe8",
+                  border: "none",
+                  borderRadius: "2rem",
+                }}
+                onMouseEnter={e => (e.target.style.background = "#f08b51")}
+                onMouseLeave={e => (e.target.style.background = "#f89c4e")}
+                onClick={() => setExistsModal(false)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <button
         type="submit"
-        className="w-full mt-4 px-4 py-2 border-2 border-yellow-900 text-white bg-yellow-900 rounded focus:outline-none focus:ring-2 hover:bg-yellow-800 hover:border-yellow-800 transition-colors"
+        className="w-full mt-4 px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 transition-colors cursor-pointer"
+        style={{
+          borderColor: "#f89c4e",
+          background: "#f89c4e",
+          color: "#fffbe8",
+          borderRadius: "2rem",
+        }}
+        onMouseEnter={e => (e.target.style.background = "#f08b51")}
+        onMouseLeave={e => (e.target.style.background = "#f89c4e")}
         disabled={
           submitted &&
           (
