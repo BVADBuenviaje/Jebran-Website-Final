@@ -5,13 +5,13 @@ import StickyHeadroom from "@integreat-app/react-sticky-headroom";
 import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
 
-export default function Navbar() {
+export default function Navbar({ role }) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem("access"));
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -22,33 +22,42 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle navigation clicks
+  // Listen for changes to localStorage (e.g. login/logout from other tabs)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setToken(localStorage.getItem("access"));
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   const handleNavClick = (path) => {
-    const currentPath = location.pathname;
-    
-    // If we're on home page, scroll to section
-    if (currentPath === '/') {
-      const element = document.getElementById(path.replace('/', ''));
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-      }
-    } 
-    // If we're not on home page, navigate to home then scroll
-    else {
-      navigate('/');
-      setTimeout(() => {
-        const element = document.getElementById(path.replace('/', ''));
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 100);
-    }
+    navigate(path);
   };
 
-  // Check if current path is active
   const isActive = (path) => {
     return location.pathname === path;
   };
+
+  // Admin links
+  const adminLinks = [
+    { label: "Home", path: "/" },
+    { label: "Users", path: "/dashboard" },
+    { label: "Products", path: "/admin-products" },
+    { label: "Ingredients", path: "/ingredients" },
+    { label: "Suppliers", path: "/suppliers" },
+  ];
+
+  // Regular user links
+  const userLinks = [
+    { label: "Home", path: "/" },
+    { label: "Products", path: "/products" },
+    { label: "About", path: "/about" },
+    { label: "Contact", path: "/contact" },
+    { label: "Orders", path: "/orders" },
+  ];
+
+  const linksToShow = role === "admin" ? adminLinks : userLinks;
 
   return (
     <StickyHeadroom scrollHeight={500} pinStart={10}>
@@ -63,51 +72,18 @@ export default function Navbar() {
             <img src={logo} alt="logo" className="w-12 h-12" />
           </ul>
           <div className="flex items-center justify-center gap-x-16 text-[#FFFBE8]">
-            <ul
-              className={`cursor-pointer hover:opacity-80 font-jomhuria text-[28px] transition-opacity duration-200 ${
-                isActive('/') ? 'opacity-100 font-bold' : 'opacity-90'
-              }`}
-              style={{ letterSpacing: "2px", marginTop: "4px" }}
-              onClick={() => handleNavClick('/')}
-            >
-              Home
-            </ul>
-            <ul
-              className={`cursor-pointer hover:opacity-80 font-jomhuria text-[28px] transition-opacity duration-200 ${
-                isActive('/products') ? 'opacity-100 font-bold' : 'opacity-90'
-              }`}
-              style={{ letterSpacing: "2px", marginTop: "4px" }}
-              onClick={() => handleNavClick('/products')}
-            >
-              Products
-            </ul>
-            <ul
-              className={`cursor-pointer hover:opacity-80 font-jomhuria text-[28px] transition-opacity duration-200 ${
-                isActive('/about') ? 'opacity-100 font-bold' : 'opacity-90'
-              }`}
-              style={{ letterSpacing: "2px", marginTop: "4px" }}
-              onClick={() => handleNavClick('/about')}
-            >
-              About
-            </ul>
-            <ul
-              className={`cursor-pointer hover:opacity-80 font-jomhuria text-[28px] transition-opacity duration-200 ${
-                isActive('/contact') ? 'opacity-100 font-bold' : 'opacity-90'
-              }`}
-              style={{ letterSpacing: "2px", marginTop: "4px" }}
-              onClick={() => handleNavClick('/contact')}
-            >
-              Contact
-            </ul>
-            <ul
-              className={`cursor-pointer hover:opacity-80 font-jomhuria text-[28px] transition-opacity duration-200 ${
-                isActive('/orders') ? 'opacity-100 font-bold' : 'opacity-90'
-              }`}
-              style={{ letterSpacing: "2px", marginTop: "4px" }}
-              onClick={() => handleNavClick('/orders')}
-            >
-              Orders
-            </ul>
+            {linksToShow.map(link => (
+              <ul
+                key={link.label}
+                className={`cursor-pointer hover:opacity-80 font-jomhuria text-[28px] transition-opacity duration-200 ${
+                  isActive(link.path) ? 'opacity-100 font-bold' : 'opacity-90'
+                }`}
+                style={{ letterSpacing: "2px", marginTop: "4px" }}
+                onClick={() => handleNavClick(link.path)}
+              >
+                {link.label}
+              </ul>
+            ))}
           </div>
           <ul className="cursor-pointer hover:opacity-80 font-jomhuria text-[24px]">
             <img
@@ -138,28 +114,48 @@ export default function Navbar() {
                   padding: "0.5rem 0",
                 }}
               >
-                <button
-                  className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] transition-colors duration-200"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => navigate('/login')}
-                >
-                  Login
-                </button>
-                <button
-                  className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] transition-colors duration-200"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => navigate('/signup')}
-                >
-                  Signup
-                </button>
+                {token ? (
+                  <button
+                    className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] hover:text-white transition-colors duration-200"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => {
+                      localStorage.removeItem("access");
+                      setToken(null);
+                      window.location.reload();
+                    }}
+                  >
+                    Sign out
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] hover:text-white transition-colors duration-200"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => navigate('/login')}
+                    >
+                      Login
+                    </button>
+                    <button
+                      className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] hover:text-white transition-colors duration-200"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => navigate('/signup')}
+                    >
+                      Signup
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </ul>
