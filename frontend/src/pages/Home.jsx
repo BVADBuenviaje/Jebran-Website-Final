@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ScrollingTitle from "../components/ScrollingTitle";
-import "./Home.css";
+import "../styles/Home.css";
 import AOS from "aos";
 import "aos/dist/aos.css";
 // import { useEffect } from "react";
