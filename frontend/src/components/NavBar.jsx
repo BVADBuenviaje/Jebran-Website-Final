@@ -6,8 +6,9 @@ import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
 import "./NavBar.css";
 
-export default function Navbar() {
+export default function Navbar({ role }) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem("access"));
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,19 +24,24 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle navigation clicks
+  // Listen for changes to localStorage (e.g. login/logout from other tabs)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setToken(localStorage.getItem("access"));
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  // Handle navigation clicks (original behavior)
   const handleNavClick = (path) => {
     const currentPath = location.pathname;
-
-    // If we're on home page, scroll to section
     if (currentPath === "/") {
       const element = document.getElementById(path.replace("/", ""));
       if (element) {
         element.scrollIntoView({ behavior: "smooth" });
       }
-    }
-    // If we're not on home page, navigate to home then scroll
-    else {
+    } else {
       navigate("/");
       setTimeout(() => {
         const element = document.getElementById(path.replace("/", ""));
@@ -51,11 +57,30 @@ export default function Navbar() {
     return location.pathname === path;
   };
 
+  // Admin links (from NEW)
+  const adminLinks = [
+    { label: "Home", path: "/home" },
+    { label: "Users", path: "/dashboard" },
+    { label: "Products", path: "/admin-products" },
+    { label: "Ingredients", path: "/ingredients" },
+    { label: "Suppliers", path: "/suppliers" },
+  ];
+
+  // Regular user links (from NEW)
+  const userLinks = [
+    { label: "Home", path: "/home" },
+    { label: "Products", path: "/products" },
+    { label: "About", path: "/about" },
+    { label: "Contact", path: "/contact" },
+  ];
+
+  const linksToShow = role === "admin" ? adminLinks : userLinks;
+
   return (
     <StickyHeadroom scrollHeight={500} pinStart={10}>
       <nav className="navbar">
         <ul className="navbar-list">
-                      <li
+          <li
             className="navbar-logo"
             onClick={() => {
               if (location.pathname === "/") {
@@ -76,36 +101,16 @@ export default function Navbar() {
           >
             <img src={logo} alt="logo" />
           </li>
-          <div className="navbar-links">
-
+          {linksToShow.map((link) => (
             <li
-              className={`navbar-link${isActive("/home") ? " active" : ""}`}
-              onClick={() => handleNavClick("/home")}
+              key={link.label}
+              className={`navbar-link${isActive(link.path) ? " active" : ""}`}
+              onClick={() => handleNavClick(link.path)}
             >
-              Home
+              {link.label}
             </li>
-            <li
-              className={`navbar-link${isActive("/products") ? " active" : ""}`}
-              onClick={() => handleNavClick("/products")}
-            >
-              Products
-            </li>
-            <li
-              className={`navbar-link${isActive("/about") ? " active" : ""}`}
-              onClick={() => handleNavClick("/about")}
-            >
-              About
-            </li>
-            <li
-              className={`navbar-link${isActive("/contact") ? " active" : ""}`}
-              onClick={() => handleNavClick("/contact")}
-            >
-              Contact
-            </li>
-                      
-          </div>
-          <div className="outer-icons-right">
-<li className="navbar-cart">
+          ))}
+          <li className="navbar-cart">
             <img src={ShoppingCartIcon} alt="cart" />
           </li>
           <li className="navbar-user">
@@ -116,23 +121,36 @@ export default function Navbar() {
             />
             {showDropdown && (
               <div ref={dropdownRef} className="navbar-user-dropdown">
-                <button
-                  className="navbar-user-dropdown-btn"
-                  onClick={() => navigate("/login")}
-                >
-                  Login
-                </button>
-                <button
-                  className="navbar-user-dropdown-btn"
-                  onClick={() => navigate("/signup")}
-                >
-                  Signup
-                </button>
+                {token ? (
+                  <button
+                    className="navbar-user-dropdown-btn"
+                    onClick={() => {
+                      localStorage.removeItem("access");
+                      setToken(null);
+                      window.location.reload();
+                    }}
+                  >
+                    Sign out
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="navbar-user-dropdown-btn"
+                      onClick={() => navigate("/login")}
+                    >
+                      Login
+                    </button>
+                    <button
+                      className="navbar-user-dropdown-btn"
+                      onClick={() => navigate("/signup")}
+                    >
+                      Signup
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </li>
-          </div>
-
         </ul>
       </nav>
     </StickyHeadroom>

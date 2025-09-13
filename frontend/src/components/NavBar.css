@@ -18,7 +18,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0rem;
+  gap: 1rem;
   color: var(--text-light);
   font-family: var(--font-header);
   list-style: none;
@@ -29,7 +29,7 @@
 .navbar-logo {
   cursor: pointer;
   transition: opacity 0.2s;
-  margin-right: 12rem;
+  margin-right: 2rem;
 }
 .navbar-logo:hover {
   opacity: 0.8;
@@ -78,6 +78,7 @@
   font-family: var(--font-header);
   font-size: 1rem;
   transition: opacity 0.2s;
+  margin-left: 2rem;
 }
 .navbar-cart img {
   width: 30px;
