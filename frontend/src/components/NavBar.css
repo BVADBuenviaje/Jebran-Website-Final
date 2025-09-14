@@ -69,7 +69,7 @@
 .navbar-cart {
   cursor: pointer;
   transition: opacity 0.3s ease;
-  margin-left: 4rem;
+  margin-left: 4rem; /* #95C8D8 */
 }
 
 .navbar-cart:hover {
