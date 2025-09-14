@@ -7,6 +7,7 @@ import ShoppingCartIcon from "../assets/cart.svg";
 import "./NavBar.css";
 
 export default function Navbar({ role }) {
+  console.log("NavBar - Current role:", role); // Add this line for debugging
   const [showDropdown, setShowDropdown] = useState(false);
   const [token, setToken] = useState(localStorage.getItem("access"));
   const dropdownRef = useRef(null);
@@ -32,18 +33,24 @@ export default function Navbar({ role }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Handle navigation clicks - scroll if on home page, navigate otherwise
-  const handleNavClick = (path) => {
+  // Add these separate handlers
+  const handlePageNavigation = (path) => {
+    console.log("Navigating to page:", path);
+    navigate(path);
+  };
+
+  const handleSectionScroll = (sectionId) => {
+    console.log("Scrolling to section:", sectionId);
     const currentPath = location.pathname;
     if (currentPath === "/") {
-      const element = document.getElementById(path.replace("/", ""));
+      const element = document.getElementById(sectionId);
       if (element) {
         element.scrollIntoView({ behavior: "smooth" });
       }
     } else {
       navigate("/");
       setTimeout(() => {
-        const element = document.getElementById(path.replace("/", ""));
+        const element = document.getElementById(sectionId);
         if (element) {
           element.scrollIntoView({ behavior: "smooth" });
         }
@@ -59,7 +66,7 @@ export default function Navbar({ role }) {
   const adminLinks = [
     { label: "Home", path: "/" },
     { label: "Users", path: "/dashboard" },
-    { label: "Products", path: "/admin-products" },
+    { label: "Products", path: "/products" },
     { label: "Ingredients", path: "/ingredients" },
     { label: "Suppliers", path: "/suppliers" },
   ];
@@ -70,73 +77,56 @@ export default function Navbar({ role }) {
     { label: "Products", path: "/products" },
     { label: "About", path: "/about" },
     { label: "Contact", path: "/contact" },
-    { label: "Orders", path: "/orders" },
   ];
 
   const linksToShow = role === "admin" ? adminLinks : userLinks;
 
   return (
     <StickyHeadroom scrollHeight={500} pinStart={10}>
-      <nav
-        className="fixed top-[30px] left-1/2 -translate-x-1/2 
-        w-[70%] max-w-5xl rounded-[100px] border border-[#F08B51] 
-        bg-[#F08B51] px-6 py-1 shadow-lg transition-transform duration-300"
-        style={{ width: "100%" }}
-      >
-        <ul className="flex items-center justify-center gap-x-16 text-[#FFFBE8]">
-          <ul className="cursor-pointer hover:opacity-80">
-            <img src={logo} alt="logo" className="w-12 h-12" />
-          </ul>
-          <div className="flex items-center justify-center gap-x-16 text-[#FFFBE8]">
+      <nav className="navbar">
+        <ul className="navbar-list">
+          <li className="navbar-logo">
+            <img src={logo} alt="logo" />
+          </li>
+          <div className="navbar-links">
             {linksToShow.map(link => (
-              <ul
+              <li
                 key={link.label}
-                className={`cursor-pointer hover:opacity-80 font-jomhuria text-[28px] transition-opacity duration-200 ${
-                  isActive(link.path) ? 'opacity-100 font-bold' : 'opacity-90'
-                }`}
-                style={{ letterSpacing: "2px", marginTop: "4px" }}
-                onClick={() => handleNavClick(link.path)}
+                className={`navbar-link ${isActive(link.path) ? 'active' : ''}`}
+                onClick={() => {
+                  if (link.path === "/" || link.path === "/home") {
+                    handleSectionScroll("home");
+                  } else if (link.path.startsWith("/#")) {
+                    handleSectionScroll(link.path.replace("/#", ""));
+                  } else {
+                    handlePageNavigation(link.path);
+                  }
+                }}
               >
                 {link.label}
-              </ul>
+              </li>
             ))}
           </div>
-          <ul className="cursor-pointer hover:opacity-80 font-jomhuria text-[24px]">
-            <img
-              src={ShoppingCartIcon}
-              alt="cart"
-              className="w-[30px] h-[30px]"
+          <li className="navbar-cart">
+            <img 
+              src={ShoppingCartIcon} 
+              alt="cart" 
+              onClick={() => navigate('/orders')}
+              style={{ cursor: 'pointer' }}
             />
-          </ul>
-          <ul className="relative">
+          </li>
+
+          <li className="navbar-user">
             <img
               src={UserIcon}
               alt="user"
               onClick={() => setShowDropdown((prev) => !prev)}
             />
             {showDropdown && (
-              <div
-                ref={dropdownRef}
-                className="absolute right-0 mt-2 w-40 shadow-lg z-50"
-                style={{
-                  background: "#FFFBE8",
-                  border: "2px solid #F08B51",
-                  color: "#BB6653",
-                  fontFamily: "Buda, serif",
-                  fontSize: "1.3rem",
-                  fontWeight: "lighter",
-                  letterSpacing: "1px",
-                  padding: "0.5rem 0",
-                }}
-              >
+              <div ref={dropdownRef} className="navbar-dropdown">
                 {token ? (
                   <button
-                    className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] hover:text-white transition-colors duration-200"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
+                    className="navbar-dropdown-btn"
                     onClick={() => {
                       localStorage.removeItem("access");
                       setToken(null);
@@ -148,33 +138,22 @@ export default function Navbar({ role }) {
                 ) : (
                   <>
                     <button
-                      className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] hover:text-white transition-colors duration-200"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
+                      className="navbar-dropdown-btn"
                       onClick={() => navigate('/login')}
                     >
                       Login
                     </button>
                     <button
-                      className="block w-full px-4 py-2 text-left hover:bg-[#F08B51] hover:text-white transition-colors duration-200"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
+                      className="navbar-dropdown-btn"
                       onClick={() => navigate('/signup')}
                     >
                       Signup
                     </button>
                   </>
-                  //#TODO: Add signup button
                 )}
               </div>
             )}
-          </ul>
+          </li>
         </ul>
       </nav>
     </StickyHeadroom>

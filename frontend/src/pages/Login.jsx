@@ -35,7 +35,7 @@ const Login = () => {
         return;
       }
 
-      if (role !== "reseller" && role !== "admin") {
+      if (role !== "reseller" && role !== "admin" && !userRes.data.is_superuser) {
         setPendingModal(true);
         return;
       }
