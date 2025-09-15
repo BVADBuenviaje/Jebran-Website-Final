@@ -6,6 +6,9 @@ class Ingredient(models.Model):
     default_unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     restock_level = models.DecimalField(max_digits=12, decimal_places=3, help_text="Minimum quantity before restocking")
     is_active = models.BooleanField(default=True)
+    # New fields
+    category = models.CharField(max_length=50, blank=True, help_text="e.g. Produce, Meat, Dry Goods")
+    expiry_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return self.name
