@@ -9,7 +9,7 @@ class IngredientViewSet(viewsets.ModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ["name", "unit_of_measurement"]
+    search_fields = ["name", "unit_of_measurement", "category"]
 
     def perform_create(self, serializer):
         serializer.save()
