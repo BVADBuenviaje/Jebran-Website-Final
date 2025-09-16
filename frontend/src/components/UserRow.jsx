@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
 const Divider = () => (
   <div className="mx-2 h-8 w-px bg-yellow-900/30 self-center" />
@@ -47,7 +48,12 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
   return (
     <>
       <div className={`flex items-center pl-5 pr-3 h-13 rounded-lg text-yellow-900 shadow ${user.is_blocked ? "opacity-50 bg-gray-300" : "bg-gray-200"}`}>
-        <span className="flex-1 font-semibold truncate overflow-hidden">{user.username}</span>
+        <Link
+          to={`/admin/users/${user.id}`}
+          className="flex-1 font-semibold truncate overflow-hidden text-blue-600 hover:underline"
+        >
+          {user.full_name || user.username}
+        </Link>
         <Divider />
         <span className="flex-1 truncate overflow-hidden">{user.shop_name}</span>
         <Divider />

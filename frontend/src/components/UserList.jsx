@@ -1,5 +1,6 @@
 import React from "react";
 import UserRow from "./UserRow";
+import { Link } from 'react-router-dom';
 
 const UserList = ({ users, onRoleChange, onBlock }) => (
   <div className="flex flex-col w-full gap-4">
