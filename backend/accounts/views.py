@@ -55,6 +55,17 @@ class UserViewSet(ModelViewSet):
             serializer = self.get_serializer(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response({"detail": "User is not a customer."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    def check(self, request):
+        username = request.data.get("username")
+        email = request.data.get("email")
+        username_exists = User.objects.filter(username=username).exists() if username else False
+        email_exists = User.objects.filter(email=email).exists() if email else False
+        return Response({
+            "username_exists": username_exists,
+            "email_exists": email_exists,
+        })
 
 class UserListView(ListAPIView):
     queryset = User.objects.all().order_by("id")

@@ -1,0 +1,75 @@
+.scroller {
+    max-width: 100%;
+    overflow: hidden;
+    -webkit-mask: linear-gradient(90deg, transparent, white 20%, white 80%, transparent);
+    mask: linear-gradient(90deg, transparent, white 20%, white 80%, transparent);
+  }
+  
+  .sectionTitle {
+    width: max-content;
+    padding-block: 0 0 0 0;
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    height: 40px;
+    /* flex-wrap: nowrap; */
+    animation: scroll 30s linear infinite;
+    background-image: linear-gradient(45deg, #ffb286, #ffb286, #ffb286);
+    /* -webkit-background-clip: text; */
+    background-clip: text;
+    color: transparent;
+    font-size: 1.5rem;
+    font-weight: bold;
+    font-family: "Buda", serif;
+      justify-content: center; /* Center elements horizontally */
+
+  }
+  @keyframes scrollTitle {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+#hr1,
+#hr2 {
+  /* border: #ffb286; */
+  border-top: 100px solid var(--primary-orange);
+  margin: 2rem 0;
+  width: 100%;
+}
+  .sectionTitle h2 {
+    margin: 0;
+    /* white-space: nowrap; */
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  
+  /* Keyframe animation for continuous right-to-left scrolling */
+  @keyframes scroll {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  
+  /* Pause animation on hover for better UX */
+  .scroller:hover .sectionTitle {
+    animation-play-state: paused;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .sectionTitle {
+      font-size: 2rem;
+      gap: 1.5rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .sectionTitle {
+      font-size: 1.5rem;
+      gap: 1rem;
+    }
+  }
+  

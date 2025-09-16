@@ -36,17 +36,31 @@ const LoginForm = ({ onSubmit, error, children }) => {
     <form
       onSubmit={handleSubmit}
       className="min-h-screen flex flex-col justify-center max-w-md w-full bg-white p-8 shadow-md space-y-4 mx-auto"
+      style={{
+          border: "none", // No border
+          borderRadius: "1rem",
+          boxShadow: "0 0 60px 0 rgba(248,156,78,0.25), 0 0 60px 0 rgba(248,156,78,0.25) inset",
+        }}
     >
-      <h1 className="text-2xl font-bold font-montserrat text-center mb-6 tracking-widest text-orange-900">LOGIN</h1>
+      <h1 className="text-2xl font-bold font-montserrat text-center mb-6 tracking-widest" style={{ color: "#f08b51" }}>
+        LOGIN
+      </h1>
       <div>
-        <label htmlFor="username" className="block mb-1 font-medium text-gray-700">Username or Email</label>
+        <label htmlFor="username" className="block mb-1 font-medium" style={{ color: "#f08b51" }}>
+          Username or Email
+        </label>
         <input
           id="username"
           name="username"
           placeholder="Username or Email"
           value={form.username}
           onChange={handleChange}
-          className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+          className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+          style={{
+            borderColor: "#f08b51",
+            background: "#fffbe8",
+            color: "#bb6653",
+          }}
         />
         {submitted && !form.username && (
           <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
@@ -55,7 +69,9 @@ const LoginForm = ({ onSubmit, error, children }) => {
         )}
       </div>
       <div>
-        <label htmlFor="password" className="block mb-1 font-medium text-gray-700">Password</label>
+        <label htmlFor="password" className="block mb-1 font-medium" style={{ color: "#f08b51" }}>
+          Password
+        </label>
         <div className="relative">
           <input
             id="password"
@@ -64,11 +80,17 @@ const LoginForm = ({ onSubmit, error, children }) => {
             placeholder="Password"
             value={form.password}
             onChange={handleChange}
-            className="w-full px-4 py-2 border-2 border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer pr-10"
+            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer pr-10"
+            style={{
+              borderColor: "#f08b51",
+              background: "#fffbe8",
+              color: "#bb6653",
+            }}
           />
           <button
             type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600"
+            className="absolute right-2 top-1/2 -translate-y-1/2"
+            style={{ color: "#bb6653" }}
             onClick={() => setShowPassword((prev) => !prev)}
             tabIndex={-1}
           >
@@ -99,7 +121,15 @@ const LoginForm = ({ onSubmit, error, children }) => {
       )}
       <button
         type="submit"
-        className="w-full mt-4 px-4 py-2 border-2 border-yellow-900 text-white bg-yellow-900 rounded focus:outline-none focus:ring-2 hover:bg-yellow-800 hover:border-yellow-800 transition-colors cursor-pointer"
+        className="w-full mt-4 px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 transition-colors cursor-pointer"
+        style={{
+          borderColor: "#f89c4e", // medium orange border
+          background: "#f89c4e",  // medium orange background
+          color: "#fffbe8",
+          borderRadius: "2rem",
+        }}
+        onMouseEnter={e => (e.target.style.background = "#f08b51")}
+        onMouseLeave={e => (e.target.style.background = "#f89c4e")}
       >
         Login
       </button>

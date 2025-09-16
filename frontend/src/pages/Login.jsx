@@ -35,7 +35,7 @@ const Login = () => {
         return;
       }
 
-      if (role !== "reseller" && role !== "admin") {
+      if (role !== "reseller" && role !== "admin" && !userRes.data.is_superuser) {
         setPendingModal(true);
         return;
       }
@@ -77,7 +77,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[url('/background.jpg')] bg-cover bg-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "#ffaa5fff" }}>
       <LoginForm onSubmit={handleLogin} error={error}>
         <p className="mt-4 text-center">
           Don't have an account yet?{" "}
@@ -94,14 +94,30 @@ const Login = () => {
               <div className="flex justify-center gap-4">
                 <button
                   type="button"
-                  className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+                  className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                  style={{
+                    background: "#b95700", // darker orange for Cancel
+                    color: "#fffbe8",
+                    border: "none",
+                    borderRadius: "2rem",
+                  }}
+                  onMouseEnter={e => (e.target.style.background = "#a04a00")}
+                  onMouseLeave={e => (e.target.style.background = "#b95700")}
                   onClick={() => setPendingModal(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="min-w-[120px] px-4 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
+                  className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                  style={{
+                    background: "#f89c4e", // regular orange for Go to Home
+                    color: "#fffbe8",
+                    border: "none",
+                    borderRadius: "2rem",
+                  }}
+                  onMouseEnter={e => (e.target.style.background = "#f08b51")}
+                  onMouseLeave={e => (e.target.style.background = "#f89c4e")}
                   onClick={handlePendingModalHome}
                 >
                   Go to Home
@@ -119,14 +135,30 @@ const Login = () => {
               <div className="flex justify-center gap-4">
                 <button
                   type="button"
-                  className="min-w-[120px] px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition-colors"
+                  className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                  style={{
+                    background: "#b95700", // darker orange for Cancel
+                    color: "#fffbe8",
+                    border: "none",
+                    borderRadius: "2rem",
+                  }}
+                  onMouseEnter={e => (e.target.style.background = "#a04a00")}
+                  onMouseLeave={e => (e.target.style.background = "#b95700")}
                   onClick={() => setBlockedModal(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="min-w-[120px] px-4 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
+                  className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                  style={{
+                    background: "#f89c4e", // regular orange for Go to Home
+                    color: "#fffbe8",
+                    border: "none",
+                    borderRadius: "2rem",
+                  }}
+                  onMouseEnter={e => (e.target.style.background = "#f08b51")}
+                  onMouseLeave={e => (e.target.style.background = "#f89c4e")}
                   onClick={handleBlockedModalHome}
                 >
                   Go to Home
@@ -144,7 +176,15 @@ const Login = () => {
               <div className="flex justify-center">
                 <button
                   type="button"
-                  className="w-24 px-4 py-2 bg-yellow-900 text-white rounded hover:bg-yellow-800 transition-colors"
+                  className="w-24 px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
+                  style={{
+                    background: "#f89c4e",
+                    color: "#fffbe8",
+                    border: "none",
+                    borderRadius: "2rem",
+                  }}
+                  onMouseEnter={e => (e.target.style.background = "#f08b51")}
+                  onMouseLeave={e => (e.target.style.background = "#f89c4e")}
                   onClick={() => setLoginErrorModal(false)}
                 >
                   OK

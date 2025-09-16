@@ -1,0 +1,147 @@
+.navbar {
+  position: fixed;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70%;
+  max-width: 800px;
+  background-color: #BB6653;
+  border: 2px solid #F08B51;
+  border-radius: 100px;
+  padding: 0.5rem 1.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.navbar-list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: #FFFBE8;
+}
+
+.navbar-logo {
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.navbar-logo:hover {
+  opacity: 0.8;
+}
+
+.navbar-logo img {
+  width: 2rem;
+  height: 2rem;
+  margin-right: 4rem;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navbar-link {
+  cursor: pointer;
+  font-family: "Buda", cursive;
+  font-size: 1.3rem;
+  font-weight: 300;
+  letter-spacing: 2px;
+  margin-top: 4px;
+  transition: opacity 0.3s ease;
+  opacity: 0.9;
+  gap: 0rem;
+}
+
+.navbar-link:hover {
+  opacity: 1;
+}
+
+.navbar-link.active {
+  opacity: 1;
+  /* font-weight: bold; */
+}
+
+.navbar-cart {
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+  margin-left: 4rem; /* #95C8D8 */
+}
+
+.navbar-cart:hover {
+  opacity: 0.8;
+}
+
+.navbar-cart img {
+  width: 1.875rem;
+  height: 1.875rem;
+}
+
+.navbar-user {
+  position: relative;
+  cursor: pointer;
+}
+
+.navbar-user img {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.navbar-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.5rem;
+  width: 10rem;
+  background-color: #FFFBE8;
+  border: 2px solid #F08B51;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+  padding: 0.5rem 0;
+}
+
+.navbar-dropdown-btn {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  color: #BB6653;
+  font-family: 'Buda', serif;
+  font-size: 1.3rem;
+  font-weight: 300;
+  letter-spacing: 1px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.navbar-dropdown-btn:hover {
+  background-color: #F08B51;
+  color: white;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .navbar {
+    width: 90%;
+    padding: 0.5rem 1rem;
+  }
+  
+  .navbar-list {
+    gap: 2rem;
+  }
+  
+  .navbar-links {
+    gap: 2rem;
+  }
+  
+  .navbar-link {
+    font-size: 1.5rem;
+  }
+}
