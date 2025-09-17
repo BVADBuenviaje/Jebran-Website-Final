@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import UserDashboard from "./pages/UserDashboard";
 import Home from "./pages/Home";
 import Navbar from "./components/NavBar";
+import Ingredients from "./pages/Ingredients";
 
 function AppContent() {
   const [role, setRole] = React.useState(null);
@@ -45,6 +46,7 @@ function AppContent() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<ProtectedDashboard />} />
+        <Route path="/ingredients" element={<Ingredients />} />
         <Route path="*" element={<div>404 Not Found</div>} />
       </Routes>
     </>
