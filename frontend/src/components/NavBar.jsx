@@ -74,9 +74,9 @@ export default function Navbar({ role }) {
   // Regular user links
   const userLinks = [
     { label: "Home", path: "/" },
-    { label: "Products", path: "/products" },
-    { label: "About", path: "/about" },
-    { label: "Contact", path: "/contact" },
+    { label: "Products", path: "/#products" },
+    { label: "About", path: "/#about" },
+    { label: "Contact", path: "/#contact" },
   ];
 
   const linksToShow = role === "admin" ? adminLinks : userLinks;
@@ -98,6 +98,7 @@ export default function Navbar({ role }) {
                     handleSectionScroll("home");
                   } else if (link.path.startsWith("/#")) {
                     handleSectionScroll(link.path.replace("/#", ""));
+
                   } else {
                     handlePageNavigation(link.path);
                   }
