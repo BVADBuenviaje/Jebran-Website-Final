@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from .models import Ingredient
-from .models import Supplier
+from .models import Ingredient, Supplier, IngredientSupplier
 from .models import Product, ProductIngredient
 
 class IngredientSerializer(serializers.ModelSerializer):
@@ -8,10 +7,25 @@ class IngredientSerializer(serializers.ModelSerializer):
         model = Ingredient
         fields = "__all__"
 
+class SupplierIngredientDetailSerializer(serializers.ModelSerializer):
+    ingredient = IngredientSerializer(read_only=True)
+    class Meta:
+        model = IngredientSupplier
+        fields = ["ingredient", "price", "is_active"]  # <-- Add is_active here
+
 class SupplierSerializer(serializers.ModelSerializer):
+    ingredients_supplied = SupplierIngredientDetailSerializer(
+        source="ingredient_suppliers", many=True, read_only=True
+    )
+
     class Meta:
         model = Supplier
         fields = "__all__"
+
+class IngredientSupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IngredientSupplier
+        fields = ["id", "supplier", "ingredient", "price", "is_active"]
 
 class ProductIngredientReadSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='ingredient.name')

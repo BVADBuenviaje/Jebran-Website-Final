@@ -3,28 +3,18 @@
 import { useEffect, useState } from "react";
 import "../styles/Home.css";
 import { ChefHat, Star, MapPin, Phone, Mail, Clock, Leaf, Zap, Heart } from "lucide-react";
-// import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom"; // <-- Make sure this is imported
 import ScrollingTitle from "../components/ScrollingTitle";
-// import "../styles/Home.css";
 import AOS from "aos";
 import "aos/dist/aos.css";
-// // import { useEffect } from "react";
 
 const Home = () => {
-  const [isVisible, setIsVisible] = useState(false)
+  const [isVisible, setIsVisible] = useState(false);
+
   useEffect(() => {
     AOS.init({ once: true, duration: 1000 });
+    setIsVisible(true);
   }, []);
-  useEffect(() => {
-    setIsVisible(true)
-  }, [])
-
-  // const scrollToSection = (sectionId: string) => {
-  //   const element = document.getElementById(sectionId)
-  //   if (element) {
-  //     element.scrollIntoView({ behavior: "smooth" })
-  //   }
-  // }
 
   const colors = {
     primary: "#f08b51",
@@ -32,13 +22,48 @@ const Home = () => {
     white: "#ffffff",
     cream: "#f6d5bf",
     dark: "#1a1a1a",
-  }
+  };
 
   // Lightweight UI shims so JSX below compiles
-  const Button = (props) => <button {...props} />
-  const Badge = (props) => <span {...props} />
-  const Card = (props) => <div {...props} />
-  const CardContent = (props) => <div {...props} />
+  const Button = (props) => <button {...props} />;
+  const Badge = (props) => <span {...props} />;
+  const Card = (props) => <div {...props} />;
+  const CardContent = (props) => <div {...props} />;
+
+  // Add missing state and navigation
+  const [role, setRole] = useState(null);
+  const navigate = useNavigate(); // <-- ADD THIS LINE
+
+  // Add missing fetchWithAuth function or import it if available
+  const fetchWithAuth = async (url) => {
+    const token = localStorage.getItem("access");
+    return fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem("access");
+    if (!token) {
+      setRole(null);
+      return;
+    }
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.role) setRole(data.role);
+        else setRole(null);
+      })
+      .catch(() => setRole(null));
+  }, []);
+
+  useEffect(() => {
+    if (role === "reseller" && window.location.pathname === "/dashboard") {
+      navigate("/"); // <-- This will now work!
+    }
+  }, [role, navigate]);
 
   return (
     <div className="min-h-screen bg-white-custom">

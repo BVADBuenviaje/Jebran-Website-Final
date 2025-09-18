@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import ScrollingTitle from "../components/ScrollingTitle";
+import "../styles/Home.css";
+import { fetchWithAuth } from "../utils/auth";
 
 const Products = () => {
   const [role, setRole] = useState(null)
@@ -34,9 +37,7 @@ const Products = () => {
       setRole(null)
       return
     }
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.role) setRole(data.role)

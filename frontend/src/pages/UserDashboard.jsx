@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { Navigate } from "react-router-dom";
 import StatBox from "../components/CountBox";
 import RoleCheckboxes from "../components/RoleCheckboxes";
 import UserList from "../components/UserList";
+import { fetchWithAuth } from "../utils/auth";
 import "../styles/UserDashboard.css";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUserShield, faUserTie, faUser, faBan } from "@fortawesome/free-solid-svg-icons";
 
 const ORANGE = "#f89c4e";
 
@@ -13,16 +17,13 @@ const UserDashboard = () => {
   const [admins, setAdmins] = useState(0);
   const [blocked, setBlocked] = useState(0);
   const [selectedRoles, setSelectedRoles] = useState(["admin", "reseller", "customer"]);
-  const [orderBy, setOrderBy] = useState("chronological"); // "alphabetical" or "chronological"
+  const [orderBy, setOrderBy] = useState("chronological");
+  const [search, setSearch] = useState("");
+  const [role, setRole] = useState(null);
+  const [loadingRole, setLoadingRole] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("access");
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/`, {
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-    })
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/`)
       .then((res) => res.json())
       .then((data) => setUsers(data))
       .catch((err) => console.error(err));
@@ -35,41 +36,60 @@ const UserDashboard = () => {
     setBlocked(users.filter(u => u.is_blocked).length);
   }, [users]);
 
-  // Filter logic for blocked and roles
-  let filteredUsers = users.filter(u => {
-    if (selectedRoles.length === 0) return true;
-    if (selectedRoles.includes("blocked") && u.is_blocked) return true;
-    return selectedRoles.includes(u.role) && !u.is_blocked;
-  });
+  useEffect(() => {
+    const token = localStorage.getItem("access"); // replace with your actual token key!
+    if (!token) {
+      setRole(null);
+      setLoadingRole(false);
+      return;
+    }
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        setRole(data?.role || null);
+        setLoadingRole(false);
+      })
+      .catch(() => {
+        setRole(null);
+        setLoadingRole(false);
+      });
+  }, []);
 
-  // Order logic
+  // Debug: See what role is being set
+  console.log("Role:", role);
+
+  let filteredUsers = users
+    .filter(u => {
+      if (selectedRoles.length === 0) return true;
+      if (selectedRoles.includes("blocked") && u.is_blocked) return true;
+      return selectedRoles.includes(u.role) && !u.is_blocked;
+    })
+    .filter(u =>
+      u.username.toLowerCase().includes(search.toLowerCase()) ||
+      (u.shop_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
+    );
+
   if (orderBy === "alphabetical") {
     filteredUsers = [...filteredUsers].sort((a, b) =>
       a.username.localeCompare(b.username)
     );
   } else {
-    // chronological: sort by date_joined ascending
-    filteredUsers = [...filteredUsers].sort((a, b) =>
-      new Date(a.date_joined) - new Date(b.date_joined)
+    filteredUsers = [...filteredUsers].sort(
+      (a, b) => new Date(a.date_joined) - new Date(b.date_joined)
     );
   }
 
   const handleRoleFilterChange = (role) => {
     setSelectedRoles((prev) =>
-      prev.includes(role)
-        ? prev.filter(r => r !== role)
-        : [...prev, role]
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
     );
   };
 
   const handleRoleChange = (user, newRole) => {
-    const token = localStorage.getItem("access");
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${user.id}/`, {
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${user.id}/`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: newRole }),
     })
       .then((res) => {
@@ -77,9 +97,7 @@ const UserDashboard = () => {
         return res.json();
       })
       .then((updatedUser) => {
-        setUsers((prev) =>
-          prev.map(u => u.id === user.id ? updatedUser : u)
-        );
+        setUsers((prev) => prev.map((u) => (u.id === user.id ? updatedUser : u)));
       })
       .catch((err) => {
         alert("Role change failed: " + err.message);
@@ -87,13 +105,9 @@ const UserDashboard = () => {
   };
 
   const handleBlock = (user) => {
-    const token = localStorage.getItem("access");
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${user.id}/`, {
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${user.id}/`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_blocked: user.is_blocked }),
     })
       .then((res) => {
@@ -101,114 +115,103 @@ const UserDashboard = () => {
         return res.json();
       })
       .then((updatedUser) => {
-        setUsers((prev) =>
-          prev.map(u => u.id === user.id ? updatedUser : u)
-        );
+        setUsers((prev) => prev.map((u) => (u.id === user.id ? updatedUser : u)));
       })
       .catch((err) => {
         alert("Block/unblock failed: " + err.message);
       });
   };
 
+  if (loadingRole) return <div className="text-center py-10">Loading...</div>;
+  if (role !== "admin") return <Navigate to="/login" />;
+
   return (
-    <div className="w-full h-screen flex flex-col items-center justify-start overflow-hidden" style={{ background: "#fff" }}>
-      <div
-        className="pb-3 w-full max-w-6xl h-full mx-auto flex flex-col shadow-2xl"
-        style={{
-          background: "#fff",
-          boxShadow: `
-            0 0 160px 60px rgba(187, 87, 0, 0.58),   /* left/right spread */
-            0 0 240px 80px rgba(248,156,78,0.25) inset
-          `,
-          borderRadius: "1rem",
-          paddingLeft: "48px",   // Increased left padding
-          paddingRight: "48px",  // Increased right padding
-        }}
-      >
-        <div style={{ height: "75px" }} />
-        <div className="flex w-full mb-4 px-0">
-          <StatBox label="User Requests" value={requests} />
-          <StatBox label="Active Resellers" value={resellers} />
-          <StatBox label="Admins" value={admins} />
-          <StatBox label="Blocked Users" value={blocked} />
+    <div className="w-screen h-screen flex items-center justify-center bg-white">
+      <div className="h-full w-[85vw] bg-white rounded-xl shadow-lg flex flex-col px-[2.5%] pb-8">
+        <div style={{ height: "11%" }} />
+        <div className="w-full flex flex-row justify-between items-center font-[Helvetica] h-[10%]">
+          <div className="flex flex-col w-1/2 h-full">
+            <h1 className="m-0 text-[2.3rem] font-bold text-[#472922ff] tracking-[0.05rem] font-[inherit]">
+              User Management
+            </h1>
+            <p className="m-0 mt-1 text-[1.1rem] text-[#472922ff] font-[inherit] font-normal tracking-[0.05rem]">
+              Manage user accounts, roles, and access.
+            </p>
+          </div>
         </div>
-        <div style={{ height: "32px" }} />
-        <div className="flex w-full px-4 mb-2 items-center">
-          <select
-            value={orderBy}
-            onChange={e => setOrderBy(e.target.value)}
-            className="px-3 py-1 rounded-full border-2 font-semibold" // <-- border-4 for thicker border
-            style={{
-              minWidth: "200px",
-              maxWidth: "230px",
-              height: "36px",
-              background: "#fffbe8",
-              color: ORANGE,
-              borderColor: ORANGE,
-            }}
-          >
-            <option value="alphabetical">Order: Alphabetical</option>
-            <option value="chronological">Order: Chronological</option>
-          </select>
+
+        {/* Stats */}
+        <div className="w-full flex flex-row items-center gap-x-6" style={{ height: "13%", marginTop: "1%" }}>
+          <StatBox
+            label="User Requests"
+            value={requests}
+            icon={<FontAwesomeIcon icon={faUser} size="2x" className="text-[#472922ff]" />}
+          />
+          <StatBox
+            label="Active Resellers"
+            value={resellers}
+            icon={<FontAwesomeIcon icon={faUserTie} size="2x" className="text-[#f89c4e]" />}
+          />
+          <StatBox
+            label="Admins"
+            value={admins}
+            icon={<FontAwesomeIcon icon={faUserShield} size="2x" className="text-[#bb6653]" />}
+          />
+          <StatBox
+            label="Blocked Users"
+            value={blocked}
+            icon={<FontAwesomeIcon icon={faBan} size="2x" className="text-[#bb6653]" />}
+          />
         </div>
-        <div className="flex w-full px-4 mb-2 items-center justify-between" style={{ height: "48px" }}>
-          <div className="flex items-center h-full">
+
+        {/* Filters + Search */}
+        <div className="w-full flex-1 flex flex-col gap-2" style={{ marginTop: "1.5%", minHeight: 0 }}>
+          <div className="w-full flex flex-row items-center justify-between mb-6">
             <RoleCheckboxes selectedRoles={selectedRoles} onChange={handleRoleFilterChange} />
+            <div className="flex items-center" style={{ width: "340px", maxWidth: "340px" }}>
+              <div className="relative w-full">
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-4 pr-10 py-1.5 rounded-full border-2 w-full text-[#472922ff] font-semibold"
+                  style={{
+                    borderColor: ORANGE,
+                    background: "#fffbe8",
+                    fontFamily: "inherit",
+                    height: "2.25rem",
+                  }}
+                />
+                <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#f89c4e]">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                    <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center h-full" style={{ position: "relative", width: "340px", maxWidth: "340px" }}>
-            <input
-              type="text"
-              placeholder="Search users..."
-              className="pl-4 pr-10 py-1 rounded-full border-2 w-full"
-              style={{
-                borderColor: ORANGE,
-                background: "#fffbe8",
-                color: ORANGE,
-                fontWeight: "bold",
-                height: "34px",
-                marginTop: "2px",
-              }}
-            />
-            <span
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer"
-              style={{ zIndex: 2, color: ORANGE }}
-              tabIndex={0}
-              role="button"
-              title="Search"
-            >
-              <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
-                <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </span>
-          </div>
-        </div>
-        <div
-          className="w-full px-4 mt-3 flex-1 flex flex-col"
-          style={{
-            minHeight: 0,
-            height: "100%",
-          }}
-        >
-          <div className="flex font-bold text-lg px-4" style={{ flex: "0 0 auto", marginBottom: "18px", color: ORANGE }}>
-            <span className="flex-1">Username</span>
-            <span className="flex-1">Shop Name</span>
-            <span className="flex-1">Email</span>
-            <span className="flex-1">Role</span>
-            <span className="flex-1">Last Active</span>
-            <span className="w-32"></span>
-          </div>
+
+          {/* Scrollable header + list */}
           <div
-            className="flex-1 overflow-y-auto pb-4 userListScroll"
-            style={{
-              minHeight: 0,
-            }}
+            className="flex-1 overflow-y-auto userListScroll"
+            style={{ minHeight: 0, maxHeight: "100%", padding: "0 8px 8px 8px" }}
           >
-            <UserList
-              users={filteredUsers}
-              onRoleChange={handleRoleChange}
-              onBlock={handleBlock}
-            />
+            <div className="bg-white sticky top-0 z-10 text-lg font-bold border-b" style={{ color: ORANGE }}>
+              <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_8rem] items-center px-2">
+                <span className="px-4 py-3">Username</span>
+                <span className="px-4 py-3">Shop Name</span>
+                <span className="px-4 py-3">Email</span>
+                <span className="px-4 py-3">Role</span>
+                <span className="px-4 py-3">Last Active</span>
+                <span className="px-4 py-3"></span>
+              </div>
+            </div>
+
+            <div className="pt-2 pb-4">
+              <UserList users={filteredUsers} onRoleChange={handleRoleChange} onBlock={handleBlock} />
+            </div>
           </div>
         </div>
       </div>
