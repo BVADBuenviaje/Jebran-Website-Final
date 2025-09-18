@@ -2,10 +2,6 @@ import React, { useState } from "react";
 
 const ORANGE = "#f89c4e";
 
-const Divider = () => (
-  <div className="mx-2 h-8 w-px self-center" style={{ background: "#fff", opacity: 0.7 }} />
-);
-
 const ROLE_OPTIONS = [
   { label: "Admin", value: "admin" },
   { label: "Reseller", value: "reseller" },
@@ -18,7 +14,6 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
   const [showUnblockModal, setShowUnblockModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState(user.role);
 
-  // Get current logged-in username from localStorage
   const currentUsername = localStorage.getItem("username");
 
   const handleRoleSelect = (e) => {
@@ -46,9 +41,7 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
     onBlock({ ...user, is_blocked: false });
   };
 
-  const fadedStyle = user.is_blocked
-    ? { opacity: 0.5 }
-    : {};
+  const fadedStyle = user.is_blocked ? { opacity: 0.5 } : {};
 
   // Helper for hover effect
   const handleButtonHover = (e, bgColor) => {
@@ -63,31 +56,38 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
   return (
     <>
       <div
-        className="flex items-center pl-5 pr-3 h-13 rounded-lg shadow"
+        className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_8rem] items-center rounded-lg bg-white mb-3"
         style={{
-          background: ORANGE,
-          color: "#fff",
+          boxShadow: "0 0 3px 0 rgba(0, 0, 0, 0.45)",
+          minHeight: "56px",
           ...fadedStyle,
         }}
       >
-        <span className="flex-1 font-semibold truncate overflow-hidden">{user.username}</span>
-        <Divider />
-        <span className="flex-1 truncate overflow-hidden">{user.shop_name}</span>
-        <Divider />
-        <span className="flex-1 truncate overflow-hidden">{user.email}</span>
-        <Divider />
-        <span className="flex-1 capitalize truncate overflow-hidden">
+        <span className="px-4 py-3 font-bold text-[#472922ff] text-base truncate border-r border-gray-200">
+          {user.username}
+        </span>
+        <span className="px-4 py-3 text-[#472922ff] text-base truncate border-r border-gray-200">
+          {user.shop_name || "-"}
+        </span>
+        <span className="px-4 py-3 text-[#472922ff] text-base truncate border-r border-gray-200">
+          {user.email}
+        </span>
+        <span className="px-4 py-3 text-[#472922ff] text-base border-r border-gray-200">
           <select
             value={selectedRole}
             onChange={handleRoleSelect}
-            className="rounded-full px-6 py-2 focus:outline-none shadow-sm"
+            className="rounded-full px-3 py-1 focus:outline-none shadow-sm"
             style={{
-              minWidth: "120px",
-              background: "#fff",
+              minWidth: "100px",
+              background: "#fffbe8",
               color: ORANGE,
               border: "none",
-              opacity: (user.is_blocked || user.username === currentUsername) ? 0.5 : 1,
-              cursor: (user.is_blocked || user.username === currentUsername) ? "not-allowed" : "pointer",
+              opacity:
+                user.is_blocked || user.username === currentUsername ? 0.5 : 1,
+              cursor:
+                user.is_blocked || user.username === currentUsername
+                  ? "not-allowed"
+                  : "pointer",
             }}
             disabled={user.is_blocked || user.username === currentUsername}
           >
@@ -98,27 +98,30 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
             ))}
           </select>
         </span>
-        <Divider />
-        <span className="flex-1 truncate overflow-hidden">
+        <span className="px-4 py-3 text-[#472922ff] text-base truncate border-r border-gray-200">
           {user.last_active ? new Date(user.last_active).toLocaleString() : "-"}
         </span>
-        <Divider />
-        <span className="w-32 flex items-center justify-center gap-2">
+        <span className="px-4 py-3 flex items-center justify-end gap-2">
+          {user.is_blocked && (
+            <span className="px-2 py-1 rounded bg-[#bb6653] text-white text-xs font-semibold">
+              Blocked
+            </span>
+          )}
           {user.role !== "admin" && !user.is_blocked && (
             <button
               onClick={handleBlock}
               className="rounded-full px-4 py-1 flex items-center justify-center shadow transition-colors"
               style={{
-                background: "#fff",
+                background: "#fffbe8",
                 color: ORANGE,
                 minWidth: "60px",
-                height: "28px",
+                height: "32px",
                 border: "none",
                 fontWeight: "bold",
               }}
               title="Block User"
-              onMouseEnter={e => handleButtonHover(e, "#f08b51")}
-              onMouseLeave={e => handleButtonLeave(e, "#fff", ORANGE)}
+              onMouseEnter={(e) => handleButtonHover(e, "#f08b51")}
+              onMouseLeave={(e) => handleButtonLeave(e, "#fffbe8", ORANGE)}
             >
               Block
             </button>
@@ -128,16 +131,16 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
               onClick={handleUnblock}
               className="rounded-full px-4 py-1 flex items-center justify-center shadow transition-colors"
               style={{
-                background: "#fff",
+                background: "#fffbe8",
                 color: "#4caf50",
                 minWidth: "80px",
-                height: "28px",
+                height: "32px",
                 border: "none",
                 fontWeight: "bold",
               }}
               title="Unblock User"
-              onMouseEnter={e => handleButtonHover(e, "#388e3c")}
-              onMouseLeave={e => handleButtonLeave(e, "#fff", "#4caf50")}
+              onMouseEnter={(e) => handleButtonHover(e, "#388e3c")}
+              onMouseLeave={(e) => handleButtonLeave(e, "#fffbe8", "#4caf50")}
             >
               Unblock
             </button>
@@ -149,8 +152,12 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
       {showRoleModal && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
-            <p className="text-lg font-semibold mb-4 text-center" style={{ color: ORANGE }}>
-              Are you sure you want to change {user.username} into {selectedRole}?
+            <p
+              className="text-lg font-semibold mb-4 text-center"
+              style={{ color: ORANGE }}
+            >
+              Are you sure you want to change {user.username} into{" "}
+              {selectedRole}?
             </p>
             <div className="flex justify-center gap-4">
               <button
@@ -162,8 +169,10 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
                   border: "none",
                   borderRadius: "2rem",
                 }}
-                onMouseEnter={e => handleButtonHover(e, "#a04a00")}
-                onMouseLeave={e => handleButtonLeave(e, "#b95700", "#fffbe8")}
+                onMouseEnter={(e) => handleButtonHover(e, "#a04a00")}
+                onMouseLeave={(e) =>
+                  handleButtonLeave(e, "#b95700", "#fffbe8")
+                }
                 onClick={() => {
                   setShowRoleModal(false);
                   setSelectedRole(user.role);
@@ -180,8 +189,8 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
                   border: "none",
                   borderRadius: "2rem",
                 }}
-                onMouseEnter={e => handleButtonHover(e, "#f08b51")}
-                onMouseLeave={e => handleButtonLeave(e, ORANGE, "#fffbe8")}
+                onMouseEnter={(e) => handleButtonHover(e, "#f08b51")}
+                onMouseLeave={(e) => handleButtonLeave(e, ORANGE, "#fffbe8")}
                 onClick={confirmRoleChange}
               >
                 Yes
@@ -195,7 +204,10 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
       {showBlockModal && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
-            <p className="text-lg font-semibold mb-4 text-center" style={{ color: ORANGE }}>
+            <p
+              className="text-lg font-semibold mb-4 text-center"
+              style={{ color: ORANGE }}
+            >
               Are you sure you want to block {user.username}?
             </p>
             <div className="flex justify-center gap-4">
@@ -208,8 +220,10 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
                   border: "none",
                   borderRadius: "2rem",
                 }}
-                onMouseEnter={e => handleButtonHover(e, "#a04a00")}
-                onMouseLeave={e => handleButtonLeave(e, "#b95700", "#fffbe8")}
+                onMouseEnter={(e) => handleButtonHover(e, "#a04a00")}
+                onMouseLeave={(e) =>
+                  handleButtonLeave(e, "#b95700", "#fffbe8")
+                }
                 onClick={() => setShowBlockModal(false)}
               >
                 Cancel
@@ -223,8 +237,8 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
                   border: "none",
                   borderRadius: "2rem",
                 }}
-                onMouseEnter={e => handleButtonHover(e, "#f08b51")}
-                onMouseLeave={e => handleButtonLeave(e, ORANGE, "#fffbe8")}
+                onMouseEnter={(e) => handleButtonHover(e, "#f08b51")}
+                onMouseLeave={(e) => handleButtonLeave(e, ORANGE, "#fffbe8")}
                 onClick={confirmBlock}
               >
                 Block
@@ -238,7 +252,10 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
       {showUnblockModal && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded shadow-lg p-6 max-w-sm w-full">
-            <p className="text-lg font-semibold mb-4 text-center" style={{ color: ORANGE }}>
+            <p
+              className="text-lg font-semibold mb-4 text-center"
+              style={{ color: ORANGE }}
+            >
               Are you sure you want to unblock {user.username}?
             </p>
             <div className="flex justify-center gap-4">
@@ -251,8 +268,10 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
                   border: "none",
                   borderRadius: "2rem",
                 }}
-                onMouseEnter={e => handleButtonHover(e, "#a04a00")}
-                onMouseLeave={e => handleButtonLeave(e, "#b95700", "#fffbe8")}
+                onMouseEnter={(e) => handleButtonHover(e, "#a04a00")}
+                onMouseLeave={(e) =>
+                  handleButtonLeave(e, "#b95700", "#fffbe8")
+                }
                 onClick={() => setShowUnblockModal(false)}
               >
                 Cancel
@@ -266,8 +285,10 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
                   border: "none",
                   borderRadius: "2rem",
                 }}
-                onMouseEnter={e => handleButtonHover(e, "#388e3c")}
-                onMouseLeave={e => handleButtonLeave(e, "#4caf50", "#fffbe8")}
+                onMouseEnter={(e) => handleButtonHover(e, "#388e3c")}
+                onMouseLeave={(e) =>
+                  handleButtonLeave(e, "#4caf50", "#fffbe8")
+                }
                 onClick={confirmUnblock}
               >
                 Unblock

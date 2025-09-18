@@ -62,3 +62,18 @@ class Supplier(models.Model):
         ordering = ["name"]
         verbose_name = "Supplier"
         verbose_name_plural = "Suppliers"
+
+class IngredientSupplier(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name="ingredient_suppliers")
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="ingredient_suppliers")
+    price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Supplier-specific price for this ingredient")
+    is_active = models.BooleanField(default=True)
+
+
+    class Meta:
+        unique_together = ("supplier", "ingredient")
+        verbose_name = "Ingredient Supplier"
+        verbose_name_plural = "Ingredient Suppliers"
+
+    def __str__(self):
+        return f"{self.supplier.name} supplies {self.ingredient.name} at {self.price}"

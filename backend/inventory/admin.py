@@ -1,6 +1,5 @@
 from django.contrib import admin
-from .models import Ingredient
-from .models import Supplier
+from .models import Ingredient, Supplier, IngredientSupplier
 from .models import Product
 
 
@@ -22,3 +21,10 @@ class ProductAdmin(admin.ModelAdmin):
     search_fields = ("name", "category")
     list_filter = ("status",)
 
+
+
+@admin.register(IngredientSupplier)
+class IngredientSupplierAdmin(admin.ModelAdmin):
+    list_display = ("supplier", "ingredient", "price")
+    search_fields = ("supplier__name", "ingredient__name")
+    list_filter = ("supplier", "ingredient")

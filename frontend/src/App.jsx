@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "r
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import UserDashboard from "./pages/UserDashboard";
+import SupplierDashboard from "./pages/SupplierDashboard";
 import Home from "./pages/Home";
 import Navbar from "./components/NavBar";
 import Ingredients from "./pages/Ingredients";
@@ -47,6 +48,7 @@ function AppContent() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<ProtectedDashboard />} />
+        <Route path="/suppliers" element={<SupplierDashboard />} />
         <Route path="/ingredients" element={<Ingredients />} />
         <Route path="/products" element={<Products />} />
         
