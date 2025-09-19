@@ -87,9 +87,14 @@ const AddSupplierModal = ({ open, onClose, onSubmit }) => {
               <input
                 id="contact_number"
                 name="contact_number"
-                type="text"
+                type="tel"
                 value={form.contact_number}
                 onChange={handleChange}
+                onKeyPress={(e) => {
+                  if (!/[0-9]/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
+                    e.preventDefault();
+                  }
+                }}
                 className="w-full border rounded px-3 py-2"
               />
             </div>

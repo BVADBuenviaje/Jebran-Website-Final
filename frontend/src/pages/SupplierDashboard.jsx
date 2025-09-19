@@ -42,11 +42,9 @@ const SupplierDashboard = () => {
     }
   };
 
-
-
   useEffect(() => {
     // Check if token exists before fetching role
-    const token = localStorage.getItem("access"); // replace with your token key
+    const token = localStorage.getItem("access");
     if (!token) {
       setRole(null);
       setLoadingRole(false);
@@ -89,6 +87,15 @@ const SupplierDashboard = () => {
       new Date(a.created_at || 0) - new Date(b.created_at || 0)
     );
   }
+
+  // Auto-select first supplier when suppliers list changes
+  useEffect(() => {
+    if (filteredSuppliers.length > 0 && !selectedSupplier) {
+      handleSelectSupplier(filteredSuppliers[0]);
+    } else if (filteredSuppliers.length === 0) {
+      setSelectedSupplier(null);
+    }
+  }, [filteredSuppliers, selectedSupplier]);
 
   // Handlers
   const handleEdit = async (form) => {
@@ -174,6 +181,8 @@ const SupplierDashboard = () => {
   // Add supplier and ingredient relationships
   const handleAddSupplier = async (form) => {
     try {
+      console.log("Form data being sent:", form);
+
       // 1. Create the supplier
       const supplierRes = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/suppliers/`, {
         method: "POST",
@@ -190,7 +199,9 @@ const SupplierDashboard = () => {
       });
 
       if (!supplierRes.ok) {
-        alert("Failed to add supplier.");
+        const errorData = await supplierRes.json();
+        console.error("Error response:", errorData);
+        alert(`Failed to add supplier: ${JSON.stringify(errorData)}`);
         return;
       }
 
@@ -272,8 +283,8 @@ const SupplierDashboard = () => {
       // Fetch the updated supplier details directly and update selectedSupplier
       const res = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/suppliers/${selectedSupplier.id}/`);
       const updatedSupplier = await res.json();
-      console.log("Fetched supplier after update:", updatedSupplier); // <-- Add this log
-      console.log("Updated supplier ingredients_supplied:", updatedSupplier.ingredients_supplied); // <-- Add this log
+      console.log("Fetched supplier after update:", updatedSupplier);
+      console.log("Updated supplier ingredients_supplied:", updatedSupplier.ingredients_supplied);
       setSelectedSupplier(updatedSupplier);
 
       // Optionally, refetch suppliers list to keep the sidebar in sync
@@ -283,194 +294,240 @@ const SupplierDashboard = () => {
       alert("Failed to update products.");
     }
   };
+
   // Restrict access to admins only
-  if (loadingRole) return <div className="text-center py-10">Loading...</div>;
+  if (loadingRole) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col items-center justify-center min-h-96">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   if (role !== "admin") return <Navigate to="/login" />;
 
+  const totalSuppliers = suppliers.length;
+  const activeSuppliers = suppliers.filter(s => s.is_active).length;
+  const blockedSuppliers = suppliers.filter(s => !s.is_active).length;
+
   return (
-    <div className="w-screen h-screen flex items-center justify-center bg-white">
-      <div className="h-full w-[85vw] bg-white rounded-xl shadow-lg flex flex-col px-[2.5%] pb-8">
-        <div
-          id="supplier-spacer"
-          className="w-full"
-          style={{ height: "11%" }}
-        >
-          {/* Supplier Header Spacer */}
-        </div>
-        <div
-          id="supplier-header"
-          className="w-full flex flex-row justify-between items-center font-[Helvetica] h-[10%]"
-        >
-          <div
-            id="supplier-header-left"
-            className="flex flex-col w-1/2 h-full"
-          >
-            <h1 className="m-0 text-[2.3rem] font-bold text-[#472922ff] tracking-[0.05rem] font-[inherit]">
-              Supplier Management
-            </h1>
-            <p className="m-0 mt-1 text-[1.1rem] text-[#472922ff] font-[inherit] font-normal tracking-[0.05rem]">
-              Manage supplier relationships and details.
-            </p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6 mt-20">
+            {/* Back button intentionally omitted */}
           </div>
-          <div
-            id="supplier-header-right"
-            className="flex flex-col w-1/2 h-full justify-center items-end"
+
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Supplier Management</h1>
+            <p className="text-gray-600">Manage supplier relationships and details</p>
+          </div>
+          <button 
+            onClick={() => setShowAddModal(true)} 
+            className="bg-[#f08b51] hover:bg-[#d9734a] text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 mb-8"
           >
-            <button
-              className="flex items-center px-6 py-2 rounded-lg font-normal text-white transition-colors"
-              style={{
-                background: "#f08b51",
-                color: "#fff",
-                borderRadius: "0.2rem",
-                fontSize: "1.1rem",
-                boxShadow: "0 2px 8px rgba(248,156,78,0.15)",
-                cursor: "pointer",
-              }}
-              onClick={() => setShowAddModal(true)}
-              onMouseEnter={e => { e.currentTarget.style.background = "#bb6653"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "#f08b51"; }}
-            >
-              <div className="flex items-center justify-center pr-4">
-                {/* Plus icon (SVG) */}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="11" fill="#fff" opacity="0.18"/>
-                  <path d="M12 7v10M7 12h10" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add New Supplier
+          </button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Total Suppliers</p>
+                  <p className="text-3xl font-bold text-[#f08b51] mb-1">{totalSuppliers}</p>
+                  <p className="text-sm text-gray-500">All suppliers</p>
+                </div>
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faUsers} className="w-5 h-5 text-gray-600" />
+                </div>
               </div>
-              <span className="font-[inherit] font-normal text-white tracking-[0.05rem] text-[1.1rem]">
-                Add Supplier
-              </span>
-            </button>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Active Suppliers</p>
+                  <p className="text-3xl font-bold text-[#f08b51] mb-1">{activeSuppliers}</p>
+                  <p className="text-sm text-gray-500">Currently active</p>
+                </div>
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faCheckCircle} className="w-5 h-5 text-gray-600" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Blocked Suppliers</p>
+                  <p className="text-3xl font-bold text-[#f08b51] mb-1">{blockedSuppliers}</p>
+                  <p className="text-sm text-gray-500">Currently blocked</p>
+                </div>
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faBan} className="w-5 h-5 text-gray-600" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div
-          id="supplier-stats"
-          className="w-full flex flex-row items-center gap-x-6"
-          style={{
-            height: "13%",
-            marginTop: "1%",
-            padding: 0,
-            boxSizing: "border-box",
-          }}
-        >
-          <StatBox
-            label="Blocked Suppliers"
-            value={suppliers.filter(s => !s.is_active).length}
-            icon={<FontAwesomeIcon icon={faBan} size="2x" className="text-[#bb6653]" />}
-          />
-          <StatBox
-            label="Active Suppliers"
-            value={suppliers.filter(s => s.is_active).length}
-            icon={<FontAwesomeIcon icon={faCheckCircle} size="2x" className="text-[#f89c4e]" />}
-          />
-          <StatBox
-            label="Total Suppliers"
-            value={suppliers.length}
-            icon={<FontAwesomeIcon icon={faUsers} size="2x" className="text-[#472922ff]" />}
-          />
-        </div>
-        <div
-          id="supplier-content"
-          className="w-full flex-1 flex flex-row gap-6"
-          style={{
-            boxSizing: "border-box",
-            marginTop: "1.5%",
-          }}
-        >
-          <div
-            id="supplier-content-left"
-            className="flex-1 h-full bg-white rounded-lg shadow-lg p-5 flex flex-col"
-            style={{
-              boxShadow: "0 0 3px 0 rgba(0, 0, 0, 0.45)",
-              minHeight: "120px",
-              border: "none",
-              boxSizing: "border-box",
-            }}
-          >
-            <div
-              id="supplier-search-toolbar"
-              className="w-full flex flex-row items-center justify-between mb-6"
-            >
-              {/* Search Bar (Left) */}
-              <div className="flex items-center w-1/2">
-                <div className="relative w-full">
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Supplier Directory</h2>
+            <p className="text-gray-600">Manage your supplier relationships and monitor status</p>
+          </div>
+
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <svg
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
                   <input
                     type="text"
                     placeholder="Search suppliers..."
                     value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="pl-4 pr-10 py-1.5 rounded-full border-2 w-full text-[#472922ff] font-semibold"
-                    style={{
-                      borderColor: "#f89c4e",
-                      background: "#fffbe8",
-                      fontFamily: "inherit",
-                      height: "2.25rem",
-                    }}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
                   />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#f89c4e]">
-                    {/* Magnifying glass icon (SVG) */}
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-                      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
-                      <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                  </span>
                 </div>
               </div>
-              {/* StatusCheckboxes (Right) */}
-              <div className="flex items-center justify-end w-1/2" style={{ height: "2.25rem" }}>
+              <div className="flex items-center gap-2">
                 <StatusCheckboxes
                   selectedStatuses={selectedStatuses}
                   onChange={handleStatusChange}
                 />
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-              <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-                <SupplierList
-                  suppliers={filteredSuppliers}
-                  onEdit={handleOpenEditModal}
-                  onBlock={handleBlock}
-                  onSelect={handleSelectSupplier} // <-- use the async version
-                />
+          </div>
+
+          <div className="flex">
+            <div className="flex-1">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Contact
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Ingredients Supplied
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredSuppliers.map((supplier) => (
+                      <tr 
+                        key={supplier.id} 
+                        className={`hover:bg-gray-50 cursor-pointer ${
+                          selectedSupplier && selectedSupplier.id === supplier.id ? 'bg-blue-50' : ''
+                        }`}
+                        onClick={() => handleSelectSupplier(supplier)}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{supplier.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{supplier.email || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{supplier.contact_number || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            supplier.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                          }`}>
+                            {supplier.is_active ? "Active" : "Blocked"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {supplier.ingredients_supplied ? supplier.ingredients_supplied.length : 0}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditModal(supplier);
+                              }}
+                              className="px-3 py-1 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-xs"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBlock({...supplier, is_active: !supplier.is_active});
+                              }}
+                              className={`px-3 py-1 rounded-lg text-xs transition-colors ${
+                                supplier.is_active ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-green-100 text-green-700 hover:bg-green-200"
+                              }`}
+                            >
+                              {supplier.is_active ? "Block" : "Unblock"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          </div>
-          <div
-            id="supplier-content-right"
-            className="flex-1 h-full bg-white rounded-lg shadow-lg p-5 flex flex-col"
-            style={{
-              boxShadow: "0 0 3px 0 rgba(0, 0, 0, 0.45)",
-              minHeight: "120px",
-              border: "none",
-              boxSizing: "border-box",
-            }}
-          >
-            <SupplierProfile
-              supplier={selectedSupplier}
-              onEdit={handleOpenEditModal}
-              onAddProduct={() => setShowUpdateIngredientsModal(true)}
-            />
+            {selectedSupplier && (
+              <div className="w-1/2 border-l border-gray-200 p-6">
+                <SupplierProfile
+                  supplier={selectedSupplier}
+                  onEdit={handleOpenEditModal}
+                  onAddProduct={() => setShowUpdateIngredientsModal(true)}
+                />
+              </div>
+            )}
           </div>
         </div>
-        <AddSupplierModal
-          open={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onSubmit={handleAddSupplier}
-        />
-        <EditSupplierModal
-          open={showEditModal}
-          supplier={selectedSupplier}
-          onClose={() => setShowEditModal(false)}
-          onSave={handleEdit}
-        />
-        <UpdateIngredientsModal
-          open={showUpdateIngredientsModal}
-          supplier={selectedSupplier}
-          allIngredients={allIngredients}
-          onClose={() => setShowUpdateIngredientsModal(false)}
-          onSave={handleUpdateIngredients}
-        />
       </div>
+
+      <AddSupplierModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={handleAddSupplier}
+      />
+      <EditSupplierModal
+        open={showEditModal}
+        supplier={selectedSupplier}
+        onClose={() => setShowEditModal(false)}
+        onSave={handleEdit}
+      />
+      <UpdateIngredientsModal
+        open={showUpdateIngredientsModal}
+        supplier={selectedSupplier}
+        allIngredients={allIngredients}
+        onClose={() => setShowUpdateIngredientsModal(false)}
+        onSave={handleUpdateIngredients}
+      />
     </div>
   );
 };

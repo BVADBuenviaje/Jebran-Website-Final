@@ -130,8 +130,11 @@ export default function Navbar({ role }) {
                     className="navbar-dropdown-btn"
                     onClick={() => {
                       localStorage.removeItem("access");
+                      localStorage.removeItem("refresh");
+                      localStorage.removeItem("username");
                       setToken(null);
-                      window.location.reload();
+                      setShowDropdown(false);
+                      navigate("/");
                     }}
                   >
                     Sign out
