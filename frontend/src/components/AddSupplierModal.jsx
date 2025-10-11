@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const AddSupplierModal = ({ open, onClose, onSubmit }) => {
   const [form, setForm] = useState({
     name: "",
@@ -11,6 +13,7 @@ const AddSupplierModal = ({ open, onClose, onSubmit }) => {
   });
   const [ingredients, setIngredients] = useState([]);
   const [ingredientSearch, setIngredientSearch] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -63,11 +66,21 @@ const AddSupplierModal = ({ open, onClose, onSubmit }) => {
     ing.name.toLowerCase().includes(ingredientSearch.toLowerCase())
   );
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!validateEmail(form.email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setError("");
+    onSubmit(form);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-4xl">
         <h2 className="text-2xl font-bold text-[#472922ff] mb-6">Add Supplier</h2>
-        <form onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="flex flex-row gap-8">
+        <form onSubmit={handleSubmit} className="flex flex-row gap-8">
           {/* Supplier Info (Left) */}
           <div className="flex-1 flex flex-col gap-4">
             <div>
@@ -104,10 +117,16 @@ const AddSupplierModal = ({ open, onClose, onSubmit }) => {
                 id="email"
                 name="email"
                 type="email"
+                required
                 value={form.email}
                 onChange={handleChange}
                 className="w-full border rounded px-3 py-2"
               />
+              {error && (
+                <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
+                  {error}
+                </div>
+              )}
             </div>
             <div>
               <label className="block font-semibold mb-1" htmlFor="address">Address</label>
@@ -176,7 +195,22 @@ const AddSupplierModal = ({ open, onClose, onSubmit }) => {
                         placeholder="Price"
                         disabled={!selected}
                         value={selected ? selected.price : ""}
-                        onChange={e => handlePriceChange(ingredient.id, e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          // Only allow numbers and non-negative values
+                          if (/^\d*\.?\d*$/.test(val) && Number(val) >= 0) {
+                            handlePriceChange(ingredient.id, val);
+                          }
+                        }}
+                        onKeyDown={e => {
+                          // Prevent entering letters and minus sign
+                          if (
+                            ["e", "E", "+", "-", " "].includes(e.key) ||
+                            (e.key.length === 1 && !/[0-9.]/.test(e.key))
+                          ) {
+                            e.preventDefault();
+                          }
+                        }}
                         className="w-24 border rounded px-2 py-1 text-right"
                       />
                     </div>
@@ -210,7 +244,7 @@ const AddSupplierModal = ({ open, onClose, onSubmit }) => {
             type="submit"
             form="add-supplier-form"
             className="px-4 py-2 rounded bg-[#f89c4e] text-white font-semibold hover:bg-[#bb6653]"
-            onClick={() => onSubmit(form)}
+            onClick={handleSubmit}
           >
             Add Supplier
           </button>

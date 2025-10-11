@@ -43,23 +43,34 @@ const SupplierDashboard = () => {
   };
 
   useEffect(() => {
-    // Check if token exists before fetching role
+    let isMounted = true;
     const token = localStorage.getItem("access");
     if (!token) {
-      setRole(null);
-      setLoadingRole(false);
+      if (isMounted) {
+        setRole(null);
+        setLoadingRole(false);
+      }
       return;
     }
     fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
-      .then(res => (res.ok ? res.json() : null))
+      .then(res => {
+        if (!isMounted) return;
+        if (res.ok) return res.json();
+        // If not ok, don't set role to null yet (wait for refresh)
+        return null;
+      })
       .then(data => {
-        setRole(data?.role || null);
+        if (!isMounted) return;
+        if (data && data.role) setRole(data.role);
+        else setRole(null); // Only set to null if refresh failed
         setLoadingRole(false);
       })
       .catch(() => {
+        if (!isMounted) return;
         setRole(null);
         setLoadingRole(false);
       });
+    return () => { isMounted = false; };
   }, []);
 
   // Fetch suppliers

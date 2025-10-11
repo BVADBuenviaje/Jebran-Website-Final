@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { fetchWithAuth } from "../utils/auth";
 
 const Ingredients = () => {
+  const [loadingRole, setLoadingRole] = useState(true);
   const [role, setRole] = useState(null)
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -11,10 +13,8 @@ const Ingredients = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [activeCategory, setActiveCategory] = useState("All")
   const navigate = useNavigate()
-  // Add UI states for actions
   const [updating, setUpdating] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
-  // Modal + form state
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingIngredient, setEditingIngredient] = useState(null)
@@ -30,21 +30,35 @@ const Ingredients = () => {
   })
 
   useEffect(() => {
-    const token = localStorage.getItem("access")
+    let isMounted = true;
+    const token = localStorage.getItem("access");
     if (!token) {
-      setRole(null)
-      return
+      if (isMounted) {
+        setRole(null);
+        setLoadingRole(false);
+      }
+      return;
     }
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.role) setRole(data.role)
-        else setRole(null)
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
+      .then(res => {
+        if (!isMounted) return;
+        if (res.ok) return res.json();
+        // If not ok, don't set role to null yet (wait for refresh)
+        return null;
       })
-      .catch(() => setRole(null))
-  }, [])
+      .then(data => {
+        if (!isMounted) return;
+        if (data && data.role) setRole(data.role);
+        else setRole(null); // Only set to null if refresh failed
+        setLoadingRole(false);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setRole(null);
+        setLoadingRole(false);
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     if (role === "reseller" && window.location.pathname === "/dashboard") {
@@ -62,19 +76,10 @@ const Ingredients = () => {
             setError("Please log in to view ingredients")
             return
           }
-
-          const ingredientsListUrl = new URL('/api/inventory/ingredients/', import.meta.env.VITE_ACCOUNTS_URL).toString()
-          const response = await fetch(ingredientsListUrl, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          })
-
+          const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/`)
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
           }
-
           const data = await response.json()
           setIngredients(data)
           setError("")
@@ -85,7 +90,6 @@ const Ingredients = () => {
           setLoading(false)
         }
       }
-
       fetchIngredients()
     }
   }, [role])
@@ -94,15 +98,10 @@ const Ingredients = () => {
   const toggleIngredientStatus = async (ingredientId, currentStatus) => {
     try {
       setUpdating(ingredientId)
-      const token = localStorage.getItem("access")
       const nextStatus = !currentStatus
-      const ingredientUrl = new URL(`/api/inventory/ingredients/${ingredientId}/`, import.meta.env.VITE_ACCOUNTS_URL).toString()
-      const response = await fetch(ingredientUrl, {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/${ingredientId}/`, {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_active: nextStatus }),
       })
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
@@ -122,13 +121,8 @@ const Ingredients = () => {
     if (!confirmed) return
     try {
       setDeletingId(ingredientId)
-      const token = localStorage.getItem("access")
-      const ingredientUrl = new URL(`/api/inventory/ingredients/${ingredientId}/`, import.meta.env.VITE_ACCOUNTS_URL).toString()
-      const response = await fetch(ingredientUrl, {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/${ingredientId}/`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
       if (!response.ok && response.status !== 204) throw new Error(`HTTP error! status: ${response.status}`)
       setIngredients(prev => prev.filter(i => i.id !== ingredientId))
@@ -190,7 +184,6 @@ const Ingredients = () => {
     e.preventDefault()
     try {
       setSaving(true)
-      const token = localStorage.getItem("access")
       const payload = {
         name: formData.name.trim(),
         unit_of_measurement: formData.unit_of_measurement.trim(),
@@ -203,15 +196,12 @@ const Ingredients = () => {
       }
       const isEdit = !!editingIngredient
       const url = isEdit
-        ? new URL(`/api/inventory/ingredients/${editingIngredient.id}/`, import.meta.env.VITE_ACCOUNTS_URL).toString()
-        : new URL('/api/inventory/ingredients/', import.meta.env.VITE_ACCOUNTS_URL).toString()
+        ? `${import.meta.env.VITE_INVENTORY_URL}/ingredients/${editingIngredient.id}/`
+        : `${import.meta.env.VITE_INVENTORY_URL}/ingredients/`
       const method = isEdit ? "PATCH" : "POST"
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
@@ -332,6 +322,21 @@ const Ingredients = () => {
       </div>
     )
   }
+
+  if (loadingRole) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col items-center justify-center min-h-96">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (role !== "admin") return <Navigate to="/login" />;
 
   return (
     <div className="min-h-screen bg-gray-50">

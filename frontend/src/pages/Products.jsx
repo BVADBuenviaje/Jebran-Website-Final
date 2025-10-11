@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import ScrollingTitle from "../components/ScrollingTitle";
-import "../styles/Home.css";
-import { fetchWithAuth } from "../utils/auth";
+import { fetchWithAuth } from "../utils/auth"
 
 const Products = () => {
   const [role, setRole] = useState(null)
@@ -14,37 +12,52 @@ const Products = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [activeCategory] = useState("All")
   const navigate = useNavigate()
-  // Add UI states for actions
   const [updating, setUpdating] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
-  // Modal + form state
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
+  const [loadingRole, setLoadingRole] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
     category: "",
     price: "",
     stock: "",
     status: "Active",
-    ingredients: [], // [{ name, quantity, uom }]
+    ingredients: [],
   })
-  const [allIngredients, setAllIngredients] = useState([]) // Full ingredient objects with current_stock
+  const [allIngredients, setAllIngredients] = useState([])
 
   useEffect(() => {
-    const token = localStorage.getItem("access")
+    let isMounted = true;
+    const token = localStorage.getItem("access");
     if (!token) {
-      setRole(null)
-      return
+      if (isMounted) {
+        setRole(null);
+        setLoadingRole(false);
+      }
+      return;
     }
     fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.role) setRole(data.role)
-        else setRole(null)
+      .then(res => {
+        if (!isMounted) return;
+        if (res.ok) return res.json();
+        // If not ok, don't set role to null yet (wait for refresh)
+        return null;
       })
-      .catch(() => setRole(null))
-  }, [])
+      .then(data => {
+        if (!isMounted) return;
+        if (data && data.role) setRole(data.role);
+        else setRole(null); // Only set to null if refresh failed
+        setLoadingRole(false);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setRole(null);
+        setLoadingRole(false);
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     if (role === "reseller" && window.location.pathname === "/dashboard") {
@@ -57,24 +70,10 @@ const Products = () => {
       const fetchProducts = async () => {
         try {
           setLoading(true)
-          const token = localStorage.getItem("access")
-          if (!token) {
-            setError("Please log in to view products")
-            return
-          }
-
-          const productsListUrl = new URL('/api/inventory/products/', import.meta.env.VITE_ACCOUNTS_URL).toString()
-          const response = await fetch(productsListUrl, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          })
-
+          const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/products/`)
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
           }
-
           const data = await response.json()
           setProducts(data)
           setError("")
@@ -85,7 +84,6 @@ const Products = () => {
           setLoading(false)
         }
       }
-
       fetchProducts()
     }
   }, [role])
@@ -93,24 +91,19 @@ const Products = () => {
   useEffect(() => {
     const token = localStorage.getItem("access")
     if (!token) return
-    // fetch full ingredient objects for stock checking
-    const url = new URL('/api/inventory/ingredients/', import.meta.env.VITE_ACCOUNTS_URL).toString()
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setAllIngredients(Array.isArray(data) ? data : []))
       .catch(() => setAllIngredients([]))
   }, [])
 
-  // Helper function to check ingredient sufficiency
   const checkIngredientSufficiency = (ingredientName, requiredQuantity, requiredUom) => {
     const ingredient = allIngredients.find(ing => ing.name === ingredientName)
     if (!ingredient) return { sufficient: false, available: 0, uom: "", uomMismatch: false }
-    
     const available = Number(ingredient.current_stock) || 0
     const required = Number(requiredQuantity) || 0
-    const uomMismatch = requiredUom && ingredient.unit_of_measurement && 
+    const uomMismatch = requiredUom && ingredient.unit_of_measurement &&
       requiredUom.toLowerCase() !== ingredient.unit_of_measurement.toLowerCase()
-    
     return {
       sufficient: available >= required,
       available,
@@ -119,19 +112,13 @@ const Products = () => {
     }
   }
 
-  // Toggle product status between Active/Out of Stock
   const toggleProductStatus = async (productId, currentStatus) => {
     try {
       setUpdating(productId)
-      const token = localStorage.getItem("access")
       const nextStatus = currentStatus === "Active" ? "Out of Stock" : "Active"
-      const productUrl = new URL(`/api/inventory/products/${productId}/`, import.meta.env.VITE_ACCOUNTS_URL).toString()
-      const response = await fetch(productUrl, {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/products/${productId}/`, {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       })
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
@@ -145,19 +132,13 @@ const Products = () => {
     }
   }
 
-  // Delete product
   const deleteProduct = async (productId) => {
     const confirmed = window.confirm("Are you sure you want to delete this product?")
     if (!confirmed) return
     try {
       setDeletingId(productId)
-      const token = localStorage.getItem("access")
-      const productUrl = new URL(`/api/inventory/products/${productId}/`, import.meta.env.VITE_ACCOUNTS_URL).toString()
-      const response = await fetch(productUrl, {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/products/${productId}/`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
       if (!response.ok && response.status !== 204) throw new Error(`HTTP error! status: ${response.status}`)
       setProducts(prev => prev.filter(p => p.id !== productId))
@@ -169,7 +150,6 @@ const Products = () => {
     }
   }
 
-  // Open create modal
   const openCreateModal = () => {
     setEditingProduct(null)
     setFormData({
@@ -183,7 +163,6 @@ const Products = () => {
     setShowModal(true)
   }
 
-  // Open edit modal
   const openEditModal = (product) => {
     setEditingProduct(product)
     setFormData({
@@ -230,11 +209,8 @@ const Products = () => {
     setFormData(prev => ({ ...prev, ingredients: prev.ingredients.filter((_, i) => i !== index) }))
   }
 
-  // Submit create/edit
   const submitForm = async (e) => {
     e.preventDefault()
-    
-    // Check for ingredient sufficiency errors before saving
     const ingredientErrors = []
     formData.ingredients.forEach((ing, idx) => {
       if (ing.name && ing.quantity) {
@@ -247,15 +223,12 @@ const Products = () => {
         }
       }
     })
-    
     if (ingredientErrors.length > 0) {
       alert(`Cannot save product due to ingredient issues:\n\n${ingredientErrors.join('\n')}`)
       return
     }
-    
     try {
       setSaving(true)
-      const token = localStorage.getItem("access")
       const payload = {
         name: formData.name.trim(),
         category: formData.category.trim(),
@@ -272,15 +245,12 @@ const Products = () => {
       }
       const isEdit = !!editingProduct
       const url = isEdit
-        ? new URL(`/api/inventory/products/${editingProduct.id}/`, import.meta.env.VITE_ACCOUNTS_URL).toString()
-        : new URL('/api/inventory/products/', import.meta.env.VITE_ACCOUNTS_URL).toString()
+        ? `${import.meta.env.VITE_INVENTORY_URL}/products/${editingProduct.id}/`
+        : `${import.meta.env.VITE_INVENTORY_URL}/products/`
       const method = isEdit ? "PATCH" : "POST"
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
@@ -299,10 +269,7 @@ const Products = () => {
     }
   }
 
-  const sampleProducts = []
-
-  const displayProducts = products.length > 0 ? products : sampleProducts
-
+  const displayProducts = products.length > 0 ? products : []
   const filteredProducts = displayProducts.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = activeCategory === "All" || product.category === activeCategory
@@ -326,14 +293,28 @@ const Products = () => {
     )
   }
 
+  if (loadingRole) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col items-center justify-center min-h-96">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (role !== "admin") return <Navigate to="/login" />;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 ">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6 mt-20">
             {/* Back button intentionally omitted */}
           </div>
-
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Product Management</h1>
             <p className="text-gray-600">Track products, stock levels, and ingredients</p>
@@ -583,7 +564,6 @@ const Products = () => {
                           className="w-full border rounded-md px-3 py-2"
                           placeholder="UoM (e.g. g, ml, pcs)"
                         />
-                        {/* Stock sufficiency indicators */}
                         {ing.name && ing.quantity && (
                           <div className="md:col-span-3 flex flex-wrap gap-1 mt-1">
                             {!sufficiency.sufficient && (

@@ -88,7 +88,22 @@ const UpdateIngredientsModal = ({
                   step="0.01"
                   placeholder="Price"
                   value={prices[ingredient.id] || ""}
-                  onChange={(e) => handlePriceChange(ingredient.id, e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    // Only allow numbers and non-negative values
+                    if (/^\d*\.?\d*$/.test(val) && Number(val) >= 0) {
+                      handlePriceChange(ingredient.id, val);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Prevent entering letters and minus sign
+                    if (
+                      ["e", "E", "+", "-", " "].includes(e.key) ||
+                      (e.key.length === 1 && !/[0-9.]/.test(e.key))
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="ml-4 px-2 py-1 border rounded w-24"
                   disabled={!selected.includes(ingredient.id)}
                 />

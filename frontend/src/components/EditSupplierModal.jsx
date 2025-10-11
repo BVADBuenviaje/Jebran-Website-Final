@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const EditSupplierModal = ({ open, supplier, onClose, onSave }) => {
   const [form, setForm] = useState({
     name: "",
@@ -9,6 +11,7 @@ const EditSupplierModal = ({ open, supplier, onClose, onSave }) => {
     is_active: true,
     ingredients: [],
   });
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (supplier) {
@@ -30,6 +33,15 @@ const EditSupplierModal = ({ open, supplier, onClose, onSave }) => {
   }, [supplier]);
 
   if (!open) return null;
+
+  const handleSave = () => {
+    if (!validateEmail(form.email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setError("");
+    onSave(form);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -55,9 +67,16 @@ const EditSupplierModal = ({ open, supplier, onClose, onSave }) => {
           <label className="block font-semibold mb-1">Email</label>
           <input
             className="w-full border rounded px-3 py-2"
+            type="email"
+            required
             value={form.email}
             onChange={e => setForm({ ...form, email: e.target.value })}
           />
+          {error && (
+            <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
+              {error}
+            </div>
+          )}
         </div>
         <div className="mb-2">
           <label className="block font-semibold mb-1">Address</label>
@@ -77,7 +96,7 @@ const EditSupplierModal = ({ open, supplier, onClose, onSave }) => {
           </button>
           <button
             className="px-4 py-2 rounded bg-[#f89c4e] text-white font-semibold"
-            onClick={() => onSave(form)}
+            onClick={handleSave}
           >
             Save
           </button>

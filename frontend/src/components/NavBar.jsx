@@ -6,8 +6,9 @@ import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
 import "./NavBar.css";
 
-export default function Navbar({ role }) {
-  console.log("NavBar - Current role:", role); // Add this line for debugging
+export default function Navbar({ role, loadingRole }) {
+  //console.log("NavBar - Current role:", role, "Loading:", loadingRole);
+
   const [showDropdown, setShowDropdown] = useState(false);
   const [token, setToken] = useState(localStorage.getItem("access"));
   const dropdownRef = useRef(null);
@@ -24,7 +25,6 @@ export default function Navbar({ role }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Listen for changes to localStorage (e.g. login/logout from other tabs)
   useEffect(() => {
     const handleStorageChange = () => {
       setToken(localStorage.getItem("access"));
@@ -33,14 +33,11 @@ export default function Navbar({ role }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Add these separate handlers
   const handlePageNavigation = (path) => {
-    console.log("Navigating to page:", path);
     navigate(path);
   };
 
   const handleSectionScroll = (sectionId) => {
-    console.log("Scrolling to section:", sectionId);
     const currentPath = location.pathname;
     if (currentPath === "/") {
       const element = document.getElementById(sectionId);
@@ -81,6 +78,17 @@ export default function Navbar({ role }) {
 
   const linksToShow = role === "admin" ? adminLinks : userLinks;
 
+  //console.log("NavBar - Current role:", role, "Loading:", loadingRole, "Links:", linksToShow.map(l => l.label));
+
+  // Show nothing or a spinner while loading role
+  if (loadingRole) {
+    return (
+      <div className="flex justify-center items-center h-16">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f08b51]" />
+      </div>
+    );
+  }
+
   return (
     <StickyHeadroom scrollHeight={500} pinStart={10}>
       <nav className="navbar">
@@ -98,7 +106,6 @@ export default function Navbar({ role }) {
                     handleSectionScroll("home");
                   } else if (link.path.startsWith("/#")) {
                     handleSectionScroll(link.path.replace("/#", ""));
-
                   } else {
                     handlePageNavigation(link.path);
                   }
@@ -116,7 +123,6 @@ export default function Navbar({ role }) {
               style={{ cursor: 'pointer' }}
             />
           </li>
-
           <li className="navbar-user">
             <img
               src={UserIcon}
