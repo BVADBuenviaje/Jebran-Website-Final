@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { fetchWithAuth } from "../utils/auth"
 
+
 const Products = () => {
   const [role, setRole] = useState(null)
   const [products, setProducts] = useState([])
@@ -346,7 +347,7 @@ const Products = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Low Stock Alerts</p>
@@ -364,7 +365,7 @@ const Products = () => {
                   </svg>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
@@ -436,9 +437,9 @@ const Products = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Price
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Stock
-                  </th>
+                  </th> */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
@@ -508,19 +509,13 @@ const Products = () => {
                 <input name="name" value={formData.name} onChange={handleChange} required className="w-full border rounded-md px-3 py-2" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                   <input name="category" value={formData.category} onChange={handleChange} placeholder="e.g. Noodles" className="w-full border rounded-md px-3 py-2" />
-                </div>
+                </div> */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Price (₱)</label>
                   <input name="price" value={formData.price} onChange={handleChange} type="number" step="0.01" min="0" className="w-full border rounded-md px-3 py-2" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
-                  <input name="stock" value={formData.stock} onChange={handleChange} type="number" min="0" className="w-full border rounded-md px-3 py-2" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
@@ -530,6 +525,13 @@ const Products = () => {
                     <option value="Low Stock">Low Stock</option>
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+                  <input name="stock" value={formData.stock} onChange={handleChange} type="number" min="0" className="w-full border rounded-md px-3 py-2" />
+                </div> */}
+
               </div>
 
               <div>
@@ -558,12 +560,12 @@ const Products = () => {
                           className="w-full border rounded-md px-3 py-2"
                           placeholder="Quantity"
                         />
-                        <input
+                        {/* <input
                           value={ing.uom}
                           onChange={(e) => handleIngredientFieldChange(idx, 'uom', e.target.value)}
                           className="w-full border rounded-md px-3 py-2"
                           placeholder="UoM (e.g. g, ml, pcs)"
-                        />
+                        /> */}
                         {ing.name && ing.quantity && (
                           <div className="md:col-span-3 flex flex-wrap gap-1 mt-1">
                             {!sufficiency.sufficient && (
