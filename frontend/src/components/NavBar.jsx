@@ -4,7 +4,8 @@ import logo from "../assets/Logo.svg";
 import StickyHeadroom from "@integreat-app/react-sticky-headroom";
 import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
-import CartModal from "./CartModal";
+import ResellerCartModal from "./ResellerCartModal";
+import AdminCartModal from "./AdminCartModal";
 import "./NavBar.css";
 
 export default function Navbar({ role, loadingRole }) {
@@ -169,10 +170,11 @@ export default function Navbar({ role, loadingRole }) {
         </nav>
       </StickyHeadroom>
       {showCartModal && (
-        <CartModal
-          role={role}
-          onClose={() => setShowCartModal(false)}
-        />
+        role === "reseller" ? (
+          <ResellerCartModal onClose={() => setShowCartModal(false)} />
+        ) : role === "admin" ? (
+          <AdminCartModal onClose={() => setShowCartModal(false)} />
+        ) : null
       )}
     </>
   );
