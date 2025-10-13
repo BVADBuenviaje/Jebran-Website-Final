@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { fetchWithAuth } from "../utils/auth";
+const unitOptions = ["kg", "g", "L", "mL", "pcs", "pack", "bottle", "bag"]
+const categoryOptions = ["Vegetables", "Meat", "Dairy", "Grains", "Oils", "Herbs", "Spices", "Others"]
 
 const Ingredients = () => {
+  const [loadingRole, setLoadingRole] = useState(true);
   const [role, setRole] = useState(null)
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -11,10 +15,8 @@ const Ingredients = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [activeCategory, setActiveCategory] = useState("All")
   const navigate = useNavigate()
-  // Add UI states for actions
   const [updating, setUpdating] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
-  // Modal + form state
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingIngredient, setEditingIngredient] = useState(null)
@@ -25,25 +27,40 @@ const Ingredients = () => {
     restock_level: "",
     category: "",
     expiry_date: "",
+    current_stock: "",
     is_active: true,
   })
 
   useEffect(() => {
-    const token = localStorage.getItem("access")
+    let isMounted = true;
+    const token = localStorage.getItem("access");
     if (!token) {
-      setRole(null)
-      return
+      if (isMounted) {
+        setRole(null);
+        setLoadingRole(false);
+      }
+      return;
     }
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.role) setRole(data.role)
-        else setRole(null)
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
+      .then(res => {
+        if (!isMounted) return;
+        if (res.ok) return res.json();
+        // If not ok, don't set role to null yet (wait for refresh)
+        return null;
       })
-      .catch(() => setRole(null))
-  }, [])
+      .then(data => {
+        if (!isMounted) return;
+        if (data && data.role) setRole(data.role);
+        else setRole(null); // Only set to null if refresh failed
+        setLoadingRole(false);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setRole(null);
+        setLoadingRole(false);
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     if (role === "reseller" && window.location.pathname === "/dashboard") {
@@ -61,18 +78,10 @@ const Ingredients = () => {
             setError("Please log in to view ingredients")
             return
           }
-
-          const response = await fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/../inventory/ingredients/`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          })
-
+          const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/`)
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
           }
-
           const data = await response.json()
           setIngredients(data)
           setError("")
@@ -83,23 +92,19 @@ const Ingredients = () => {
           setLoading(false)
         }
       }
-
       fetchIngredients()
     }
   }, [role])
 
-  // Add: toggle active status
+  // Toggle ingredient status between Active/Inactive
   const toggleIngredientStatus = async (ingredientId, currentStatus) => {
     try {
       setUpdating(ingredientId)
-      const token = localStorage.getItem("access")
-      const response = await fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/../inventory/ingredients/${ingredientId}/`, {
+      const nextStatus = !currentStatus
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/${ingredientId}/`, {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ is_active: !currentStatus }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: nextStatus }),
       })
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const updated = await response.json()
@@ -112,18 +117,14 @@ const Ingredients = () => {
     }
   }
 
-  // Add: delete ingredient
+  // Delete ingredient
   const deleteIngredient = async (ingredientId) => {
     const confirmed = window.confirm("Are you sure you want to delete this ingredient?")
     if (!confirmed) return
     try {
       setDeletingId(ingredientId)
-      const token = localStorage.getItem("access")
-      const response = await fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/../inventory/ingredients/${ingredientId}/`, {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/${ingredientId}/`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
       if (!response.ok && response.status !== 204) throw new Error(`HTTP error! status: ${response.status}`)
       setIngredients(prev => prev.filter(i => i.id !== ingredientId))
@@ -145,6 +146,7 @@ const Ingredients = () => {
       restock_level: "",
       category: "",
       expiry_date: "",
+      current_stock: "",
       is_active: true,
     })
     setShowModal(true)
@@ -159,8 +161,9 @@ const Ingredients = () => {
       default_unit_price: ingredient.default_unit_price ?? "",
       restock_level: ingredient.restock_level ?? "",
       category: ingredient.category || "",
-      expiry_date: ingredient.expiry_date ? new Date(ingredient.expiry_date).toISOString().slice(0, 10) : "",
-      is_active: !!ingredient.is_active,
+      expiry_date: ingredient.expiry_date || "",
+      current_stock: ingredient.current_stock ?? "",
+      is_active: ingredient.is_active ?? true,
     })
     setShowModal(true)
   }
@@ -178,28 +181,29 @@ const Ingredients = () => {
     }))
   }
 
+  // Submit create/edit
   const submitForm = async (e) => {
     e.preventDefault()
     try {
       setSaving(true)
-      const token = localStorage.getItem("access")
       const payload = {
-        ...formData,
+        name: formData.name.trim(),
+        unit_of_measurement: formData.unit_of_measurement.trim(),
         default_unit_price: formData.default_unit_price === "" ? null : Number(formData.default_unit_price),
         restock_level: formData.restock_level === "" ? null : Number(formData.restock_level),
+        category: formData.category.trim(),
         expiry_date: formData.expiry_date || null,
+        current_stock: formData.current_stock === "" ? null : Number(formData.current_stock),
+        is_active: formData.is_active,
       }
       const isEdit = !!editingIngredient
       const url = isEdit
-        ? `${import.meta.env.VITE_ACCOUNTS_URL}/../inventory/ingredients/${editingIngredient.id}/`
-        : `${import.meta.env.VITE_ACCOUNTS_URL}/../inventory/ingredients/`
+        ? `${import.meta.env.VITE_INVENTORY_URL}/ingredients/${editingIngredient.id}/`
+        : `${import.meta.env.VITE_INVENTORY_URL}/ingredients/`
       const method = isEdit ? "PATCH" : "POST"
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
@@ -219,66 +223,72 @@ const Ingredients = () => {
   }
 
   const sampleIngredients = [
-    {
-      id: 1,
-      name: "Tomatoes",
-      quantity: "150 kg",
-      supplier: "Fresh Farms Co.",
-      category: "Vegetables",
-      status: "In Stock",
-      expiry_date: "2024-01-15",
-      is_active: true,
-    },
-    {
-      id: 2,
-      name: "Chicken Breast",
-      quantity: "25 kg",
-      supplier: "Premium Meats",
-      category: "Meat",
-      status: "Low Stock",
-      expiry_date: "2024-01-15",
-      is_active: true,
-    },
-    {
-      id: 3,
-      name: "Olive Oil",
-      quantity: "80 L",
-      supplier: "Mediterranean Oils",
-      category: "Oils",
-      status: "In Stock",
-      expiry_date: "2024-01-15",
-      is_active: true,
-    },
-    {
-      id: 4,
-      name: "Flour",
-      quantity: "5 kg",
-      supplier: "Grain Mills Ltd.",
-      category: "Grains",
-      status: "Critical",
-      expiry_date: "2024-01-15",
-      is_active: true,
-    },
-    {
-      id: 5,
-      name: "Cheese",
-      quantity: "45 kg",
-      supplier: "Dairy Fresh",
-      category: "Dairy",
-      status: "In Stock",
-      expiry_date: "2024-01-15",
-      is_active: true,
-    },
-    {
-      id: 6,
-      name: "Basil",
-      quantity: "12 kg",
-      supplier: "Herb Gardens",
-      category: "Herbs",
-      status: "Low Stock",
-      expiry_date: "2024-01-15",
-      is_active: true,
-    },
+    // {
+    //   id: 1,
+    //   name: "Tomatoes",
+    //   unit_of_measurement: "kg",
+    //   default_unit_price: 2.50,
+    //   restock_level: 10,
+    //   category: "Vegetables",
+    //   expiry_date: "2024-01-15",
+    //   current_stock: 15,
+    //   is_active: true,
+    // },
+    // {
+    //   id: 2,
+    //   name: "Chicken Breast",
+    //   unit_of_measurement: "kg",
+    //   default_unit_price: 8.99,
+    //   restock_level: 5,
+    //   category: "Meat",
+    //   expiry_date: "2024-01-12",
+    //   current_stock: 3,
+    //   is_active: true,
+    // },
+    // {
+    //   id: 3,
+    //   name: "Olive Oil",
+    //   unit_of_measurement: "L",
+    //   default_unit_price: 12.99,
+    //   restock_level: 2,
+    //   category: "Oils",
+    //   expiry_date: "2024-06-15",
+    //   current_stock: 1,
+    //   is_active: true,
+    // },
+    // {
+    //   id: 4,
+    //   name: "Flour",
+    //   unit_of_measurement: "kg",
+    //   default_unit_price: 1.99,
+    //   restock_level: 20,
+    //   category: "Grains",
+    //   expiry_date: "2024-08-20",
+    //   current_stock: 25,
+    //   is_active: true,
+    // },
+    // {
+    //   id: 5,
+    //   name: "Cheese",
+    //   unit_of_measurement: "kg",
+    //   default_unit_price: 6.50,
+    //   restock_level: 8,
+    //   category: "Dairy",
+    //   expiry_date: "2024-01-18",
+    //   current_stock: 12,
+    //   is_active: true,
+    // },
+    // {
+    //   id: 6,
+    //   name: "Basil",
+    //   unit_of_measurement: "kg",
+    //   default_unit_price: 15.99,
+    //   restock_level: 2,
+    //   category: "Herbs",
+    //   expiry_date: "2024-01-10",
+    //   current_stock: 1,
+    //   is_active: true,
+    // },
   ]
 
   const displayIngredients = ingredients.length > 0 ? ingredients : sampleIngredients
@@ -289,18 +299,18 @@ const Ingredients = () => {
     return matchesSearch && matchesCategory
   })
 
-  const categories = ["All", "Vegetables", "Meat", "Dairy", "Oils", "Grains", "Herbs", "Flour", "Seasonings"]
+  const categories = ["All", ...Array.from(new Set(displayIngredients.map(i => i.category).filter(Boolean)))]
 
   const totalIngredients = displayIngredients.length
-  const lowStockAlerts = displayIngredients.filter(i => i.status === "Low Stock" || i.status === "Critical").length
+  const lowStockAlerts = displayIngredients.filter(i => i.current_stock && i.restock_level && i.current_stock <= i.restock_level).length
   const expiryAlerts = displayIngredients.filter(i => {
     if (!i.expiry_date) return false
-    const expiry = new Date(i.expiry_date)
+    const expiryDate = new Date(i.expiry_date)
     const today = new Date()
-    const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    return diffDays <= 3
+    const diffTime = expiryDate - today
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays <= 3 && diffDays >= 0
   }).length
-  const categoryCount = new Set(displayIngredients.map(i => i.category).filter(Boolean)).size
 
   if (loading) {
     return (
@@ -315,56 +325,32 @@ const Ingredients = () => {
     )
   }
 
-  if (error) {
+  if (loadingRole) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col items-center justify-center min-h-96">
-            <div className="bg-white rounded-lg shadow-sm border border-red-200 p-8 text-center max-w-md">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Ingredients</h2>
-              <p className="text-gray-600 mb-6">{error}</p>
-              <button
-                className="bg-[#f08b51] hover:bg-[#d9734a] text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                onClick={() => window.location.reload()}
-              >
-                Try Again
-              </button>
-            </div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading...</p>
           </div>
         </div>
       </div>
-    )
+    );
   }
+
+  if (role !== "admin") return <Navigate to="/login" />;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6 mt-20">
-            {/* <div className="flex items-center gap-4">
-              <button className="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                Back to Home
-              </button>
-            </div> */}
-
+            {/* Back button intentionally omitted */}
           </div>
 
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Ingredient Management</h1>
-            <p className="text-gray-600">Track inventory, stock levels, and expiry dates</p>
+            <p className="text-gray-600">Track ingredients, stock levels, and expiry dates</p>
           </div>
           <button onClick={openCreateModal} className="bg-[#f08b51] hover:bg-[#d9734a] text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 mb-8">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -378,7 +364,7 @@ const Ingredients = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Total Ingredients</p>
                   <p className="text-3xl font-bold text-[#f08b51] mb-1">{totalIngredients}</p>
-                  <p className="text-sm text-gray-500">Across {categoryCount} categories</p>
+                  <p className="text-sm text-gray-500">Across {new Set(displayIngredients.map(i => i.category).filter(Boolean)).size} categories</p>
                 </div>
                 <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
                   <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -485,14 +471,6 @@ const Ingredients = () => {
                   />
                 </div>
               </div>
-              {/* <div className="flex gap-2">
-                <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-                  Filter
-                </button>
-                <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-                  Export
-                </button>
-              </div> */}
             </div>
           </div>
 
@@ -507,13 +485,16 @@ const Ingredients = () => {
                     UoM
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Current Stock
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Default Unit Price
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Restock Level
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Active
+                    Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Category
@@ -531,6 +512,18 @@ const Ingredients = () => {
                   <tr key={ingredient.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{ingredient.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ingredient.unit_of_measurement || "—"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        ingredient.current_stock && ingredient.restock_level && ingredient.current_stock <= ingredient.restock_level
+                          ? "bg-red-100 text-red-800"
+                          : "bg-green-100 text-green-800"
+                      }`}>
+                        {ingredient.current_stock !== null && ingredient.current_stock !== undefined 
+                          ? `${ingredient.current_stock} ${ingredient.unit_of_measurement || ''}`.trim()
+                          : "—"
+                        }
+                      </span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ingredient.default_unit_price ? `$${ingredient.default_unit_price}` : "—"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ingredient.restock_level ? `${ingredient.restock_level}${ingredient.unit_of_measurement ? ` ${ingredient.unit_of_measurement}` : ""}` : "—"}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -598,34 +591,67 @@ const Ingredients = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit of Measurement</label>
-                  <input name="unit_of_measurement" value={formData.unit_of_measurement} onChange={handleChange} placeholder="e.g. kg, L, piece" className="w-full border rounded-md px-3 py-2" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unit of Measurement</label>
+                <select
+                  name="unit_of_measurement"
+                  value={formData.unit_of_measurement}
+                  onChange={handleChange}
+                  required
+                  className="w-full border rounded-md px-3 py-2 bg-white"
+                >
+                  <option value="">Select Unit of Measure</option>
+                  {unitOptions.map((unit) => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Default Unit Price</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Default Unit Price ($)</label>
                   <input name="default_unit_price" value={formData.default_unit_price} onChange={handleChange} type="number" step="0.01" min="0" className="w-full border rounded-md px-3 py-2" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Restock Level</label>
-                  <input name="restock_level" value={formData.restock_level} onChange={handleChange} type="number" step="0.001" min="0" className="w-full border rounded-md px-3 py-2" />
+                  <input name="restock_level" value={formData.restock_level} onChange={handleChange} type="number" min="0" className="w-full border rounded-md px-3 py-2" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <input name="category" value={formData.category} onChange={handleChange} placeholder="e.g. Produce, Meat" className="w-full border rounded-md px-3 py-2" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
+                  <input name="current_stock" value={formData.current_stock} onChange={handleChange} type="number" min="0" className="w-full border rounded-md px-3 py-2" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  required
+                  className="w-full border rounded-md px-3 py-2 bg-white"
+                >
+                  <option value="">Select category</option>
+                  {categoryOptions.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
                   <input name="expiry_date" value={formData.expiry_date} onChange={handleChange} type="date" className="w-full border rounded-md px-3 py-2" />
                 </div>
-                <div className="flex items-center gap-2 pt-6">
-                  <input id="is_active" name="is_active" type="checkbox" checked={formData.is_active} onChange={handleChange} />
-                  <label htmlFor="is_active" className="text-sm text-gray-700">Active</label>
-                </div>
               </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="is_active"
+                  checked={formData.is_active}
+                  onChange={handleChange}
+                  className="h-4 w-4 text-[#f08b51] focus:ring-[#f08b51] border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-900">Active</label>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={closeModal} disabled={saving} className="px-4 py-2 rounded-md border hover:bg-gray-50">
                   Cancel

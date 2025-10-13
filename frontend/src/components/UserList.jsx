@@ -3,7 +3,7 @@ import UserRow from "./UserRow";
 import { Link } from 'react-router-dom';
 
 const UserList = ({ users, onRoleChange, onBlock }) => (
-  <div className="flex flex-col w-full gap-4">
+  <div className="flex flex-col w-full gap-1">
     {/* User rows */}
     {users.length === 0 ? (
       <div className="text-white px-4 py-4">No users found.</div>

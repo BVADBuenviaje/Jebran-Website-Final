@@ -1,5 +1,5 @@
 import React from "react";
-import "./ScrollingTitle.css";
+import "../styles/ScrollingTitle.css";
 
 const ScrollingTitle = ({ text, repetitions = 2000, speed = 10000 }) => {
   // Create array of repeated text for seamless loop

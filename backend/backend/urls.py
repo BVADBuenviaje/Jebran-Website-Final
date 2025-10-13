@@ -32,7 +32,7 @@ urlpatterns = [
     path('api/ping/', PingView.as_view(), name='ping'),
     path('api/', include(router.urls)),  # <-- gives /api/users/ and /api/users/{id}/
     path('api/accounts/', include('accounts.urls')),
-    path('api/inventory/', include('inventory.urls')),
+    path('api/inventory/', include('inventory.urls'))
 ]
 
 if settings.DEBUG:

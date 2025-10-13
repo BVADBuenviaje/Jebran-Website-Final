@@ -9,6 +9,7 @@ class Ingredient(models.Model):
     # New fields
     category = models.CharField(max_length=50, blank=True, help_text="e.g. Produce, Meat, Dry Goods")
     expiry_date = models.DateField(null=True, blank=True)
+    current_stock = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, help_text="Current available quantity")
 
     def __str__(self):
         return self.name
@@ -17,6 +18,35 @@ class Ingredient(models.Model):
         ordering = ["name"]
         verbose_name = "Ingredient"
         verbose_name_plural = "Ingredients"
+
+class Product(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    category = models.CharField(max_length=50, blank=True, help_text="e.g. Produce, Meat, Dry Goods")
+    price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    stock = models.IntegerField(null=True, blank=True, help_text="Current stock quantity")
+    status = models.CharField(max_length=20, choices=[("Active", "Active"), ("Out of Stock", "Out of Stock"), ("Low Stock", "Low Stock")], default="Active")
+    # through will be defined below; placeholder for type reference
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Product"
+        verbose_name_plural = "Products"
+
+class ProductIngredient(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="product_ingredients")
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="ingredient_products")
+    quantity = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    uom = models.CharField(max_length=20, blank=True, help_text="e.g. kg, L, piece")
+
+    class Meta:
+        unique_together = ("product", "ingredient")
+        verbose_name = "Product Ingredient"
+        verbose_name_plural = "Product Ingredients"
+
+# Define M2M using through model after classes exist
+Product.add_to_class('ingredients', models.ManyToManyField(Ingredient, through=ProductIngredient, related_name="products", blank=True))
 
 class Supplier(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -32,3 +62,18 @@ class Supplier(models.Model):
         ordering = ["name"]
         verbose_name = "Supplier"
         verbose_name_plural = "Suppliers"
+
+class IngredientSupplier(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name="ingredient_suppliers")
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="ingredient_suppliers")
+    price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Supplier-specific price for this ingredient")
+    is_active = models.BooleanField(default=True)
+
+
+    class Meta:
+        unique_together = ("supplier", "ingredient")
+        verbose_name = "Ingredient Supplier"
+        verbose_name_plural = "Ingredient Suppliers"
+
+    def __str__(self):
+        return f"{self.supplier.name} supplies {self.ingredient.name} at {self.price}"

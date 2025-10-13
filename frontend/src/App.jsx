@@ -4,35 +4,95 @@ import UserProfile from './pages/UserProfile';
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import UserDashboard from "./pages/UserDashboard";
+import SupplierDashboard from "./pages/SupplierDashboard";
 import Home from "./pages/Home";
 import Navbar from "./components/NavBar";
+import Ingredients from "./pages/Ingredients";
+import Products from "./pages/Products";
+import { fetchWithAuth } from "./utils/auth";
 
 function AppContent() {
   const [role, setRole] = React.useState(null);
+  const [loadingRole, setLoadingRole] = React.useState(true);
   const token = localStorage.getItem("access");
   const location = useLocation();
 
   React.useEffect(() => {
-    if (!token) {
-      setRole(null);
-      return;
-    }
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && data.role) setRole(data.role);
-        else setRole(null);
-      });
+    let isMounted = true;
+    setLoadingRole(true);
+    const fetchRole = async () => {
+      if (!token) {
+        if (isMounted) {
+          setRole(null);
+          setLoadingRole(false);
+        }
+        return;
+      }
+      try {
+        const res = await fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`);
+        if (!isMounted) return;
+        if (res.ok) {
+          const data = await res.json();
+          setRole(data.role || null);
+        } else {
+          setRole(null);
+        }
+      } catch {
+        if (isMounted) setRole(null);
+      } finally {
+        if (isMounted) setLoadingRole(false);
+      }
+    };
+    fetchRole();
+    return () => { isMounted = false; };
   }, [token]);
 
-  // Protected route for dashboard
   const ProtectedDashboard = () => {
     if (!token) return <Navigate to="/login" />;
-    if (role === null) return null; // loading
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
     if (role !== "admin") return <Navigate to="/" />;
     return <UserDashboard />;
+  };
+
+  const ProtectedSupplierDashboard = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "admin") return <Navigate to="/" />;
+    return <SupplierDashboard />;
+  };
+
+  const ProtectedIngredients = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "admin") return <Navigate to="/" />;
+    return <Ingredients />;
+  };
+
+  const ProtectedProducts = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "admin") return <Navigate to="/" />;
+    return <Products />;
   };
 
   // Hide navbar on login and signup pages
@@ -40,12 +100,15 @@ function AppContent() {
 
   return (
     <>
-      {!hideNavbar && <Navbar role={role} />}
+      {!hideNavbar && <Navbar role={role} loadingRole={loadingRole} />}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<ProtectedDashboard />} />
+        <Route path="/suppliers" element={<ProtectedSupplierDashboard />} />
+        <Route path="/ingredients" element={<ProtectedIngredients />} />
+        <Route path="/products" element={<ProtectedProducts />} />
         <Route path="*" element={<div>404 Not Found</div>} />
         <Route path="/admin/users/:id" element={<UserProfile />} />
       </Routes>

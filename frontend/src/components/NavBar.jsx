@@ -4,12 +4,14 @@ import logo from "../assets/Logo.svg";
 import StickyHeadroom from "@integreat-app/react-sticky-headroom";
 import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
+import ResellerCartModal from "./ResellerCartModal";
+import AdminCartModal from "./AdminCartModal";
 import "./NavBar.css";
 
-export default function Navbar({ role }) {
-  console.log("NavBar - Current role:", role); // Add this line for debugging
+export default function Navbar({ role, loadingRole }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [token, setToken] = useState(localStorage.getItem("access"));
+  const [showCartModal, setShowCartModal] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,7 +26,6 @@ export default function Navbar({ role }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Listen for changes to localStorage (e.g. login/logout from other tabs)
   useEffect(() => {
     const handleStorageChange = () => {
       setToken(localStorage.getItem("access"));
@@ -33,14 +34,11 @@ export default function Navbar({ role }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Add these separate handlers
   const handlePageNavigation = (path) => {
-    console.log("Navigating to page:", path);
     navigate(path);
   };
 
   const handleSectionScroll = (sectionId) => {
-    console.log("Scrolling to section:", sectionId);
     const currentPath = location.pathname;
     if (currentPath === "/") {
       const element = document.getElementById(sectionId);
@@ -74,88 +72,110 @@ export default function Navbar({ role }) {
   // Regular user links
   const userLinks = [
     { label: "Home", path: "/" },
-    { label: "Products", path: "/products" },
-    { label: "About", path: "/about" },
-    { label: "Contact", path: "/contact" },
+    { label: "Products", path: "/#products" },
+    { label: "About", path: "/#about" },
+    { label: "Contact", path: "/#contact" },
   ];
 
   const linksToShow = role === "admin" ? adminLinks : userLinks;
 
-  return (
-    <StickyHeadroom scrollHeight={500} pinStart={10}>
-      <nav className="navbar">
-        <ul className="navbar-list">
-          <li className="navbar-logo">
-            <img src={logo} alt="logo" />
-          </li>
-          <div className="navbar-links">
-            {linksToShow.map(link => (
-              <li
-                key={link.label}
-                className={`navbar-link ${isActive(link.path) ? 'active' : ''}`}
-                onClick={() => {
-                  if (link.path === "/" || link.path === "/home") {
-                    handleSectionScroll("home");
-                  } else if (link.path.startsWith("/#")) {
-                    handleSectionScroll(link.path.replace("/#", ""));
-                  } else {
-                    handlePageNavigation(link.path);
-                  }
-                }}
-              >
-                {link.label}
-              </li>
-            ))}
-          </div>
-          <li className="navbar-cart">
-            <img 
-              src={ShoppingCartIcon} 
-              alt="cart" 
-              onClick={() => navigate('/orders')}
-              style={{ cursor: 'pointer' }}
-            />
-          </li>
+  // Show nothing or a spinner while loading role
+  if (loadingRole) {
+    return (
+      <div className="flex justify-center items-center h-16">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f08b51]" />
+      </div>
+    );
+  }
 
-          <li className="navbar-user">
-            <img
-              src={UserIcon}
-              alt="user"
-              onClick={() => setShowDropdown((prev) => !prev)}
-            />
-            {showDropdown && (
-              <div ref={dropdownRef} className="navbar-dropdown">
-                {token ? (
-                  <button
-                    className="navbar-dropdown-btn"
-                    onClick={() => {
-                      localStorage.removeItem("access");
-                      setToken(null);
-                      window.location.reload();
-                    }}
-                  >
-                    Sign out
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      className="navbar-dropdown-btn"
-                      onClick={() => navigate('/login')}
-                    >
-                      Login
-                    </button>
-                    <button
-                      className="navbar-dropdown-btn"
-                      onClick={() => navigate('/signup')}
-                    >
-                      Signup
-                    </button>
-                  </>
-                )}
-              </div>
+  return (
+    <>
+      <StickyHeadroom scrollHeight={500} pinStart={10}>
+        <nav className="navbar">
+          <ul className="navbar-list">
+            <li className="navbar-logo">
+              <img src={logo} alt="logo" />
+            </li>
+            <div className="navbar-links">
+              {linksToShow.map(link => (
+                <li
+                  key={link.label}
+                  className={`navbar-link ${isActive(link.path) ? 'active' : ''}`}
+                  onClick={() => {
+                    if (link.path === "/" || link.path === "/home") {
+                      handleSectionScroll("home");
+                    } else if (link.path.startsWith("/#")) {
+                      handleSectionScroll(link.path.replace("/#", ""));
+                    } else {
+                      handlePageNavigation(link.path);
+                    }
+                  }}
+                >
+                  {link.label}
+                </li>
+              ))}
+            </div>
+            {token && (
+              <li className="navbar-cart">
+                <img 
+                  src={ShoppingCartIcon} 
+                  alt="cart" 
+                  onClick={() => setShowCartModal(true)}
+                  style={{ cursor: 'pointer' }}
+                />
+              </li>
             )}
-          </li>
-        </ul>
-      </nav>
-    </StickyHeadroom>
+            <li className="navbar-user">
+              <img
+                src={UserIcon}
+                alt="user"
+                onClick={() => setShowDropdown((prev) => !prev)}
+              />
+              {showDropdown && (
+                <div ref={dropdownRef} className="navbar-dropdown">
+                  {token ? (
+                    <button
+                      className="navbar-dropdown-btn"
+                      onClick={() => {
+                        localStorage.removeItem("access");
+                        localStorage.removeItem("refresh");
+                        localStorage.removeItem("username");
+                        setToken(null);
+                        setShowDropdown(false);
+                        navigate("/");
+                      }}
+                    >
+                      Sign out
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        className="navbar-dropdown-btn"
+                        onClick={() => navigate('/login')}
+                      >
+                        Login
+                      </button>
+                      <button
+                        className="navbar-dropdown-btn"
+                        onClick={() => navigate('/signup')}
+                      >
+                        Signup
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </li>
+          </ul>
+        </nav>
+      </StickyHeadroom>
+      {showCartModal && (
+        role === "reseller" ? (
+          <ResellerCartModal onClose={() => setShowCartModal(false)} />
+        ) : role === "admin" ? (
+          <AdminCartModal onClose={() => setShowCartModal(false)} />
+        ) : null
+      )}
+    </>
   );
 }
