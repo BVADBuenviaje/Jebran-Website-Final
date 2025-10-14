@@ -17,8 +17,8 @@ class SupplierAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "category", "price", "stock", "status")
-    search_fields = ("name", "category")
+    list_display = ("name", "price", "status", "image")
+    search_fields = ("name",)
     list_filter = ("status",)
 
 

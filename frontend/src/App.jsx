@@ -8,6 +8,9 @@ import Home from "./pages/Home";
 import Navbar from "./components/NavBar";
 import Ingredients from "./pages/Ingredients";
 import Products from "./pages/Products";
+import Cart from "./pages/Cart";
+import AdminCart from "./pages/AdminCart";
+import { CartProvider } from "./contexts/CartContext";
 import { fetchWithAuth } from "./utils/auth";
 
 function AppContent() {
@@ -94,6 +97,30 @@ function AppContent() {
     return <Products />;
   };
 
+  const ProtectedCart = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "reseller") return <Navigate to="/" />;
+    return <Cart />;
+  };
+
+  const ProtectedAdminCart = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "admin") return <Navigate to="/" />;
+    return <AdminCart />;
+  };
+
   // Hide navbar on login and signup pages
   const hideNavbar = location.pathname === "/login" || location.pathname === "/signup";
 
@@ -108,6 +135,8 @@ function AppContent() {
         <Route path="/suppliers" element={<ProtectedSupplierDashboard />} />
         <Route path="/ingredients" element={<ProtectedIngredients />} />
         <Route path="/products" element={<ProtectedProducts />} />
+        <Route path="/cart" element={<ProtectedCart />} />
+        <Route path="/admin-cart" element={<ProtectedAdminCart />} />
         <Route path="*" element={<div>404 Not Found</div>} />
       </Routes>
     </>
@@ -116,8 +145,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <CartProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </CartProvider>
   );
 }
