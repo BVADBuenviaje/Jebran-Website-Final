@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Navbar from "./components/NavBar";
 import Ingredients from "./pages/Ingredients";
 import Products from "./pages/Products";
+import ResupplyOrders from "./pages/ResupplyOrders"; // Add this import
 import { fetchWithAuth } from "./utils/auth";
 
 function AppContent() {
@@ -94,6 +95,18 @@ function AppContent() {
     return <Products />;
   };
 
+  const ProtectedResupplyOrders = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "admin") return <Navigate to="/" />;
+    return <ResupplyOrders />;
+  };
+
   // Hide navbar on login and signup pages
   const hideNavbar = location.pathname === "/login" || location.pathname === "/signup";
 
@@ -108,6 +121,7 @@ function AppContent() {
         <Route path="/suppliers" element={<ProtectedSupplierDashboard />} />
         <Route path="/ingredients" element={<ProtectedIngredients />} />
         <Route path="/products" element={<ProtectedProducts />} />
+        <Route path="/resupply-orders" element={<ProtectedResupplyOrders />} /> {/* Add this line */}
         <Route path="*" element={<div>404 Not Found</div>} />
       </Routes>
     </>

@@ -192,14 +192,10 @@ const SupplierDashboard = () => {
   // Add supplier and ingredient relationships
   const handleAddSupplier = async (form) => {
     try {
-      console.log("Form data being sent:", form);
-
-      // 1. Create the supplier
+      // 1. Create the supplier first
       const supplierRes = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/suppliers/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
           contact_number: form.contact_number,
@@ -211,7 +207,6 @@ const SupplierDashboard = () => {
 
       if (!supplierRes.ok) {
         const errorData = await supplierRes.json();
-        console.error("Error response:", errorData);
         alert(`Failed to add supplier: ${JSON.stringify(errorData)}`);
         return;
       }
@@ -220,16 +215,18 @@ const SupplierDashboard = () => {
 
       // 2. Create IngredientSupplier relationships for each selected ingredient
       for (const ing of form.ingredients) {
+        if (!ing.id) continue;
+        const postBody = {
+          supplier: newSupplier.id,
+          ingredient: ing.id,
+          price: ing.price || "0.00",
+          is_active: true,
+        };
+        console.log("POST body:", postBody);
         await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredient-suppliers/`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            supplier: newSupplier.id,
-            ingredient: ing.id,
-            price: ing.price || "0.00",
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(postBody),
         });
       }
 
@@ -431,29 +428,18 @@ const SupplierDashboard = () => {
           </div>
 
           <div className="flex">
-            <div className="flex-1">
+            {/* Supplier List Table with fixed width */}
+            <div className="min-w-[700px] max-w-[700px]">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full table-fixed">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Contact
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Ingredients Supplied
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-56">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Contact</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Ingredients Supplied</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -465,20 +451,20 @@ const SupplierDashboard = () => {
                         }`}
                         onClick={() => handleSelectSupplier(supplier)}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{supplier.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{supplier.email || "—"}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{supplier.contact_number || "—"}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 w-40">{supplier.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-56 overflow-hidden text-ellipsis" style={{maxWidth: "14rem"}}>{supplier.email || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-32">{supplier.contact_number || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap w-24">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                             supplier.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                           }`}>
                             {supplier.is_active ? "Active" : "Blocked"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-32">
                           {supplier.ingredients_supplied ? supplier.ingredients_supplied.length : 0}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium w-32">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={(e) => {
@@ -508,8 +494,9 @@ const SupplierDashboard = () => {
                 </table>
               </div>
             </div>
+            {/* Supplier Profile Panel with fixed width */}
             {selectedSupplier && (
-              <div className="w-1/2 border-l border-gray-200 p-6">
+              <div className="w-[400px] border-l border-gray-200 p-6">
                 <SupplierProfile
                   supplier={selectedSupplier}
                   onEdit={handleOpenEditModal}

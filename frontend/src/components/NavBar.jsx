@@ -67,6 +67,7 @@ export default function Navbar({ role, loadingRole }) {
     { label: "Products", path: "/products" },
     { label: "Ingredients", path: "/ingredients" },
     { label: "Suppliers", path: "/suppliers" },
+    { label: "Resupply Orders", path: "/resupply-orders" }, // Add this line
   ];
 
   // Regular user links
@@ -91,8 +92,8 @@ export default function Navbar({ role, loadingRole }) {
   return (
     <>
       <StickyHeadroom scrollHeight={500} pinStart={10}>
-        <nav className="navbar">
-          <ul className="navbar-list">
+        <nav className="navbar" style={{ minWidth: "1100px" }}>
+          <ul className="navbar-list" style={{ minWidth: "1100px" }}>
             <li className="navbar-logo">
               <img src={logo} alt="logo" />
             </li>
