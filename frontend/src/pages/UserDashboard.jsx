@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import RoleCheckboxes from "../components/RoleCheckboxes";
 import UserList from "../components/UserList";
 import { fetchWithAuth } from "../utils/auth";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUserShield, faUserTie, faUser, faBan } from "@fortawesome/free-solid-svg-icons";
+import { faUserShield, faUserTie, faUser, faBan } from "@fortawesome/free-solid-svg-icons";~
 
 const UserDashboard = () => {
   const [users, setUsers] = useState([]);
@@ -280,7 +280,11 @@ const UserDashboard = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.username}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <Link to={`/users/${user.id}`} className="text-blue-600 hover:underline">
+                        {user.username}
+                      </Link>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.shop_name || "—"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.email}</td>
                     <td className="px-6 py-4 whitespace-nowrap">

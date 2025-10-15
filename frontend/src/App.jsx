@@ -110,7 +110,7 @@ function AppContent() {
         <Route path="/ingredients" element={<ProtectedIngredients />} />
         <Route path="/products" element={<ProtectedProducts />} />
         <Route path="*" element={<div>404 Not Found</div>} />
-        <Route path="/admin/users/:id" element={<UserProfile />} />
+        <Route path="/users/:id" element={<UserProfile />} />
       </Routes>
     </>
   );

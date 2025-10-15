@@ -68,9 +68,13 @@ const UserRow = ({ user, onRoleChange, onBlock }) => {
           ...fadedStyle,
         }}
       >
-        <span className="px-4 py-3 font-bold text-[#472922ff] text-base truncate border-r border-gray-200">
+        <Link
+          to={`/users/${user.id}`}
+          className="px-4 py-3 font-bold text-[#472922ff] text-base truncate border-r border-gray-200 hover:underline"
+          style={{ display: "block" }}
+        >
           {user.username}
-        </span>
+        </Link>
         <span className="px-4 py-3 text-[#472922ff] text-base truncate border-r border-gray-200">
           {user.shop_name || "-"}
         </span>

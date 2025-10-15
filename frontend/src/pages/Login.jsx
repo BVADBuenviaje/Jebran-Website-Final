@@ -29,6 +29,7 @@ const Login = () => {
 
       // Save username for dashboard self-role protection
       localStorage.setItem("username", userRes.data.username);
+      localStorage.setItem("user.id", userRes.data.id);
 
       if (isBlocked) {
         setBlockedModal(true);

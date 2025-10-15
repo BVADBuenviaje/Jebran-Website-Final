@@ -134,19 +134,35 @@ export default function Navbar({ role, loadingRole }) {
               {showDropdown && (
                 <div ref={dropdownRef} className="navbar-dropdown">
                   {token ? (
-                    <button
-                      className="navbar-dropdown-btn"
-                      onClick={() => {
-                        localStorage.removeItem("access");
-                        localStorage.removeItem("refresh");
-                        localStorage.removeItem("username");
-                        setToken(null);
-                        setShowDropdown(false);
-                        navigate("/");
-                      }}
-                    >
-                      Sign out
-                    </button>
+                    <>
+                      <button
+                        className="navbar-dropdown-btn"
+                        onClick={() => {
+                          setShowDropdown(false);
+                          // Get user ID from localStorage (make sure you store it after login)
+                          const userId = localStorage.getItem("user.id");
+                          if (userId) {
+                            navigate(`/users/${userId}`);
+                          }
+                        }}
+                      >
+                        Profile
+                      </button>
+                      <button
+                        className="navbar-dropdown-btn"
+                        onClick={() => {
+                          localStorage.removeItem("access");
+                          localStorage.removeItem("refresh");
+                          localStorage.removeItem("username");
+                          localStorage.removeItem("user.id");
+                          setToken(null);
+                          setShowDropdown(false);
+                          navigate("/");
+                        }}
+                      >
+                        Sign out
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button

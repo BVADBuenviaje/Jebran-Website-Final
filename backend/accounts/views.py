@@ -14,6 +14,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
 from rest_framework import serializers
 
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+
 User = get_user_model()
 
 class UserViewSet(ModelViewSet):
@@ -28,7 +31,7 @@ class UserViewSet(ModelViewSet):
         if self.action == "me":
             return [IsAuthenticated()]
         return super().get_permissions()
-
+    
     def update(self, request, *args, **kwargs):
         kwargs['partial'] = True
         response = super().update(request, *args, **kwargs)
@@ -40,6 +43,13 @@ class UserViewSet(ModelViewSet):
             user.is_staff = False
             user.save(update_fields=["is_staff"])
         return response
+    
+    def retrieve(self, request, *args, **kwargs):
+        user = self.get_object()
+        # Only allow admin or the user themselves
+        if request.user.is_staff or request.user.id == user.id:
+            return super().retrieve(request, *args, **kwargs)
+        raise PermissionDenied("You do not have permission to view this profile.")
 
     @action(detail=False, methods=["get"])
     def me(self, request):
@@ -83,3 +93,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+
+
