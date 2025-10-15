@@ -4,17 +4,16 @@ import logo from "../assets/Logo.svg";
 import StickyHeadroom from "@integreat-app/react-sticky-headroom";
 import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
-import ResellerCartModal from "./ResellerCartModal";
-import AdminCartModal from "./AdminCartModal";
+import { useCart } from "../contexts/CartContext";
 import "./NavBar.css";
 
 export default function Navbar({ role, loadingRole }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [token, setToken] = useState(localStorage.getItem("access"));
-  const [showCartModal, setShowCartModal] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { getCartItemCount } = useCart();
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -115,14 +114,23 @@ export default function Navbar({ role, loadingRole }) {
                 </li>
               ))}
             </div>
-            {token && (
+            {token && (role === "reseller" || role === "admin") && (
               <li className="navbar-cart">
-                <img 
-                  src={ShoppingCartIcon} 
-                  alt="cart" 
-                  onClick={() => setShowCartModal(true)}
-                  style={{ cursor: 'pointer' }}
-                />
+                <div
+                  className="cart-icon-container"
+                  onClick={() => navigate(role === 'admin' ? '/admin-cart' : '/cart')}
+                >
+                  <img
+                    src={ShoppingCartIcon}
+                    alt="cart"
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {role === 'reseller' && getCartItemCount() > 0 && (
+                    <span className="cart-item-count">
+                      {getCartItemCount()}
+                    </span>
+                  )}
+                </div>
               </li>
             )}
             <li className="navbar-user">
@@ -185,13 +193,6 @@ export default function Navbar({ role, loadingRole }) {
           </ul>
         </nav>
       </StickyHeadroom>
-      {showCartModal && (
-        role === "reseller" ? (
-          <ResellerCartModal onClose={() => setShowCartModal(false)} />
-        ) : role === "admin" ? (
-          <AdminCartModal onClose={() => setShowCartModal(false)} />
-        ) : null
-      )}
     </>
   );
 }
