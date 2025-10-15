@@ -2,12 +2,14 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
+import { useCart } from "../contexts/CartContext";
 
 const Login = () => {
   const [error, setError] = useState("");
   const [pendingModal, setPendingModal] = useState(false);
   const [blockedModal, setBlockedModal] = useState(false);
   const [loginErrorModal, setLoginErrorModal] = useState(false);
+  const { setToken } = useCart();
   const navigate = useNavigate();
 
   const handleLogin = async (form) => {
@@ -18,6 +20,7 @@ const Login = () => {
       );
       localStorage.setItem("access", response.data.access);
       localStorage.setItem("refresh", response.data.refresh);
+      setToken(response.data.access); // <-- Add this line
 
       // Fetch user profile to check role and blocked status
       const userRes = await axios.get(

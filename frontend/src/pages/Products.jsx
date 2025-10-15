@@ -4,11 +4,12 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { fetchWithAuth } from "../utils/auth"
 
+
 const Products = () => {
   const [role, setRole] = useState(null)
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  const [, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [activeCategory] = useState("All")
   const navigate = useNavigate()
@@ -25,8 +26,12 @@ const Products = () => {
     stock: "",
     status: "Active",
     ingredients: [],
+    image: "",
   })
   const [allIngredients, setAllIngredients] = useState([])
+  const [uploadedFile, setUploadedFile] = useState(null)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [dropSuccess, setDropSuccess] = useState(false)
 
   useEffect(() => {
     let isMounted = true;
@@ -115,7 +120,7 @@ const Products = () => {
   const toggleProductStatus = async (productId, currentStatus) => {
     try {
       setUpdating(productId)
-      const nextStatus = currentStatus === "Active" ? "Out of Stock" : "Active"
+      const nextStatus = currentStatus === "Active" ? "Inactive" : "Active"
       const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/products/${productId}/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -152,6 +157,9 @@ const Products = () => {
 
   const openCreateModal = () => {
     setEditingProduct(null)
+    setUploadedFile(null)
+    setIsDragOver(false)
+    setDropSuccess(false)
     setFormData({
       name: "",
       category: "",
@@ -159,12 +167,16 @@ const Products = () => {
       stock: "",
       status: "Active",
       ingredients: [],
+      image: "",
     })
     setShowModal(true)
   }
 
   const openEditModal = (product) => {
     setEditingProduct(product)
+    setUploadedFile(null)
+    setIsDragOver(false)
+    setDropSuccess(false)
     setFormData({
       name: product.name || "",
       category: product.category || "",
@@ -178,6 +190,7 @@ const Products = () => {
             uom: typeof it === 'object' ? (it.uom || "") : "",
           }))
         : [],
+      image: product.image || "",
     })
     setShowModal(true)
   }
@@ -209,10 +222,73 @@ const Products = () => {
     setFormData(prev => ({ ...prev, ingredients: prev.ingredients.filter((_, i) => i !== index) }))
   }
 
+  const validateAndSetImage = (file) => {
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please select a valid image file (JPG, PNG, GIF, or WebP)');
+      return false;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return false;
+    }
+    
+    setUploadedFile(file);
+    
+    // Create a local URL for preview
+    const imageUrl = URL.createObjectURL(file);
+    setFormData(prev => ({ ...prev, image: imageUrl }));
+    return true;
+  }
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      validateAndSetImage(file);
+    }
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    
+    if (imageFiles.length === 0) {
+      alert('Please drop only image files');
+      return;
+    }
+    
+    if (imageFiles.length > 1) {
+      alert('Please drop only one image file at a time');
+      return;
+    }
+    
+    const success = validateAndSetImage(imageFiles[0]);
+    if (success) {
+      setDropSuccess(true);
+      setTimeout(() => setDropSuccess(false), 2000); // Clear success message after 2 seconds
+    }
+  }
+
   const submitForm = async (e) => {
     e.preventDefault()
     const ingredientErrors = []
-    formData.ingredients.forEach((ing, idx) => {
+    formData.ingredients.forEach((ing) => {
       if (ing.name && ing.quantity) {
         const sufficiency = checkIngredientSufficiency(ing.name, ing.quantity, ing.uom)
         if (!sufficiency.sufficient) {
@@ -229,29 +305,37 @@ const Products = () => {
     }
     try {
       setSaving(true)
-      const payload = {
-        name: formData.name.trim(),
-        category: formData.category.trim(),
-        price: formData.price === "" ? null : Number(formData.price),
-        stock: formData.stock === "" ? null : Number(formData.stock),
-        status: formData.status,
-        ingredient_items: formData.ingredients
-          .map(i => ({
-            name: (i.name || "").trim(),
-            quantity: i.quantity === "" ? null : Number(i.quantity),
-            uom: (i.uom || "").trim(),
-          }))
-          .filter(i => i.name),
+      
+      // Create FormData for file upload
+      const formDataToSend = new FormData()
+      formDataToSend.append('name', formData.name.trim())
+      formDataToSend.append('price', formData.price === "" ? "" : formData.price)
+      formDataToSend.append('status', formData.status)
+      
+      // Add image file if uploaded
+      if (uploadedFile) {
+        formDataToSend.append('image', uploadedFile)
       }
+      
+      // Add ingredient items as JSON string
+      const ingredientItems = formData.ingredients
+        .map(i => ({
+          name: (i.name || "").trim(),
+          quantity: i.quantity === "" ? null : Number(i.quantity),
+          uom: (i.uom || "").trim(),
+        }))
+        .filter(i => i.name)
+      formDataToSend.append('ingredient_items', JSON.stringify(ingredientItems))
+      
       const isEdit = !!editingProduct
       const url = isEdit
         ? `${import.meta.env.VITE_INVENTORY_URL}/products/${editingProduct.id}/`
         : `${import.meta.env.VITE_INVENTORY_URL}/products/`
       const method = isEdit ? "PATCH" : "POST"
+      
       const res = await fetchWithAuth(url, {
         method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formDataToSend, // Remove Content-Type header to let browser set it with boundary
       })
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const saved = await res.json()
@@ -277,7 +361,7 @@ const Products = () => {
   })
 
   const totalProducts = displayProducts.length
-  const lowStockAlerts = displayProducts.filter(p => (typeof p.stock === "number" ? p.stock < 10 : false) || p.status === "Low Stock").length
+  // const lowStockAlerts = displayProducts.filter(p => (typeof p.stock === "number" ? p.stock < 10 : false) || p.status === "Low Stock").length
   const activeProducts = displayProducts.filter(p => p.status === "Active").length
 
   if (loading) {
@@ -346,7 +430,7 @@ const Products = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Low Stock Alerts</p>
@@ -364,7 +448,7 @@ const Products = () => {
                   </svg>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
@@ -431,14 +515,17 @@ const Products = () => {
                     Name
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Category
+                    Image
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Price
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stock
+                    Description
                   </th>
+                  {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Stock
+                  </th> */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
@@ -454,9 +541,26 @@ const Products = () => {
                 {filteredProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.category || "—"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {product.image ? (
+                        <img 
+                          src={product.image.startsWith('http') ? product.image : `${import.meta.env.VITE_INVENTORY_URL}${product.image}`} 
+                          alt={product.name} 
+                          className="w-16 h-16 object-cover rounded-lg border"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'block';
+                          }}
+                        />
+                      ) : null}
+                      <div className="w-16 h-16 border rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-xs" style={{display: product.image ? 'none' : 'block'}}>
+                        No Image
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{product.price !== null && product.price !== undefined && `${Number(product.price)}` !== 'NaN' ? `₱${Number(product.price).toFixed(2)}` : "—"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{typeof product.stock === "number" ? product.stock : "—"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs truncate" title={product.description || ""}>
+                      {product.description ? product.description : "—"}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                      <button
                        onClick={() => toggleProductStatus(product.id, product.status)}
@@ -498,38 +602,144 @@ const Products = () => {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-xl">
-            <div className="px-6 py-4 border-b">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-xl h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b flex-shrink-0">
               <h3 className="text-lg font-semibold text-gray-900">{editingProduct ? "Edit Product" : "Add Product"}</h3>
             </div>
-            <form onSubmit={submitForm} className="px-6 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto">
+              <form id="product-form" onSubmit={submitForm} className="px-6 py-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input name="name" value={formData.name} onChange={handleChange} required className="w-full border rounded-md px-3 py-2" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                   <input name="category" value={formData.category} onChange={handleChange} placeholder="e.g. Noodles" className="w-full border rounded-md px-3 py-2" />
-                </div>
+                </div> */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Price (₱)</label>
                   <input name="price" value={formData.price} onChange={handleChange} type="number" step="0.01" min="0" className="w-full border rounded-md px-3 py-2" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
-                  <input name="stock" value={formData.stock} onChange={handleChange} type="number" min="0" className="w-full border rounded-md px-3 py-2" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                   <select name="status" value={formData.status} onChange={handleChange} className="w-full border rounded-md px-3 py-2">
                     <option value="Active">Active</option>
-                    <option value="Out of Stock">Out of Stock</option>
-                    <option value="Low Stock">Low Stock</option>
+                    <option value="Inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                <div className="space-y-2">
+                  {/* <input 
+                    name="image" 
+                    value={formData.image} 
+                    onChange={handleChange} 
+                    placeholder="Image URL (e.g. /images/product.jpg or https://example.com/image.jpg)" 
+                    className="w-full border rounded-md px-3 py-2" 
+                  /> */}
+                  <div className="text-xs text-gray-500">
+                    You can enter an image URL, upload a file, or drag & drop an image below
+                  </div>
+                  
+                  {/* Drag and Drop Area */}
+                  <div className="relative">
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                        isDragOver 
+                          ? 'border-blue-400 bg-blue-50' 
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <svg 
+                          className="mx-auto h-12 w-12 text-gray-400" 
+                          stroke="currentColor" 
+                          fill="none" 
+                          viewBox="0 0 48 48"
+                        >
+                          <path 
+                            d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" 
+                            strokeWidth={2} 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round" 
+                          />
+                        </svg>
+                        <div className="text-sm">
+                          <span className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">
+                            Click to upload
+                          </span>
+                          <span className="text-gray-500"> or drag and drop</span>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          PNG, JPG, GIF, WebP up to 5MB
+                        </div>
+                      </div>
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                  
+                  {dropSuccess && (
+                    <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                      ✓ Image uploaded successfully!
+                    </div>
+                  )}
+                  {uploadedFile && (
+                    <div className="text-xs text-green-600">
+                      Selected: {uploadedFile.name} ({(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </div>
+                  )}
+                </div>
+                {formData.image && (
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">Image Preview:</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, image: "" }));
+                          setUploadedFile(null);
+                          setIsDragOver(false);
+                          setDropSuccess(false);
+                        }}
+                        className="text-xs text-red-600 hover:text-red-800"
+                      >
+                        Clear Image
+                      </button>
+                    </div>
+                    <div className="relative inline-block">
+                      <img 
+                        src={formData.image.startsWith('http') ? formData.image : (formData.image.startsWith('/') ? `${import.meta.env.VITE_INVENTORY_URL}${formData.image}` : formData.image)} 
+                        alt="Product preview" 
+                        className="w-32 h-32 object-cover border rounded-md"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'block';
+                        }}
+                      />
+                      <div className="w-32 h-32 border rounded-md bg-gray-100 flex items-center justify-center text-gray-500 text-sm absolute top-0 left-0" style={{display: 'none'}}>
+                        Invalid image
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+                  <input name="stock" value={formData.stock} onChange={handleChange} type="number" min="0" className="w-full border rounded-md px-3 py-2" />
+                </div> */}
+
               </div>
 
               <div>
@@ -558,12 +768,12 @@ const Products = () => {
                           className="w-full border rounded-md px-3 py-2"
                           placeholder="Quantity"
                         />
-                        <input
+                        {/* <input
                           value={ing.uom}
                           onChange={(e) => handleIngredientFieldChange(idx, 'uom', e.target.value)}
                           className="w-full border rounded-md px-3 py-2"
                           placeholder="UoM (e.g. g, ml, pcs)"
-                        />
+                        /> */}
                         {ing.name && ing.quantity && (
                           <div className="md:col-span-3 flex flex-wrap gap-1 mt-1">
                             {!sufficiency.sufficient && (
@@ -592,16 +802,18 @@ const Products = () => {
                   <button type="button" onClick={() => addIngredientField()} className="w-full px-3 py-2 rounded-md border hover:bg-gray-50 text-xs">Add Ingredient</button>
                 </div>
               </div>
-
-              <div className="flex justify-end gap-2 pt-2">
+              </form>
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 flex-shrink-0">
+              <div className="flex justify-end gap-2">
                 <button type="button" onClick={closeModal} disabled={saving} className="px-4 py-2 rounded-md border hover:bg-gray-50">
                   Cancel
                 </button>
-                <button type="submit" disabled={saving} className="px-4 py-2 rounded-md bg-[#f08b51] text-white hover:bg-[#d9734a]">
+                <button type="submit" form="product-form" disabled={saving} className="px-4 py-2 rounded-md bg-[#f08b51] text-white hover:bg-[#d9734a]">
                   {saving ? "Saving..." : editingProduct ? "Save Changes" : "Create"}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

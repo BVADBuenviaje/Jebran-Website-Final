@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { fetchWithAuth } from "../utils/auth";
+const unitOptions = ["kg", "g", "L", "mL", "pcs", "pack", "bottle", "bag"]
+const categoryOptions = ["Vegetables", "Meat", "Dairy", "Grains", "Oils", "Herbs", "Spices", "Others"]
 
 const Ingredients = () => {
   const [loadingRole, setLoadingRole] = useState(true);
@@ -589,8 +591,19 @@ const Ingredients = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit of Measurement</label>
-                  <input name="unit_of_measurement" value={formData.unit_of_measurement} onChange={handleChange} placeholder="e.g. kg, liter, piece" className="w-full border rounded-md px-3 py-2" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unit of Measurement</label>
+                <select
+                  name="unit_of_measurement"
+                  value={formData.unit_of_measurement}
+                  onChange={handleChange}
+                  required
+                  className="w-full border rounded-md px-3 py-2 bg-white"
+                >
+                  <option value="">Select Unit of Measure</option>
+                  {unitOptions.map((unit) => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Default Unit Price ($)</label>
@@ -609,8 +622,19 @@ const Ingredients = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <input name="category" value={formData.category} onChange={handleChange} placeholder="e.g. Vegetables, Meat" className="w-full border rounded-md px-3 py-2" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  required
+                  className="w-full border rounded-md px-3 py-2 bg-white"
+                >
+                  <option value="">Select category</option>
+                  {categoryOptions.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>

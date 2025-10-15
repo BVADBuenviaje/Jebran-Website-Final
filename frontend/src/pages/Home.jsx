@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import "../styles/Home.css";
 import { ChefHat, Star, MapPin, Phone, Mail, Clock, Leaf, Zap, Heart } from "lucide-react";
 import { useNavigate } from "react-router-dom"; // <-- Make sure this is imported
+import { fetchWithAuth } from "../utils/auth";
 import ScrollingTitle from "../components/ScrollingTitle";
+import { useCart } from "../contexts/CartContext";
 import AOS from "aos";
 import "aos/dist/aos.css";
 
@@ -33,16 +35,9 @@ const Home = () => {
   // Add missing state and navigation
   const [role, setRole] = useState(null);
   const navigate = useNavigate(); // <-- ADD THIS LINE
+  const { addToCart } = useCart(); // Add cart functionality
 
-  // Add missing fetchWithAuth function or import it if available
-  const fetchWithAuth = async (url) => {
-    const token = localStorage.getItem("access");
-    return fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-  };
+  // Using shared fetchWithAuth which auto-refreshes access tokens on 401
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -64,6 +59,43 @@ const Home = () => {
       navigate("/"); // <-- This will now work!
     }
   }, [role, navigate]);
+
+  const isLoggedIn = !!localStorage.getItem("access");
+
+  // Handle adding products to cart
+  const handleAddToCart = (product) => {
+    console.log("Adding to cart:", product);
+    addToCart(product);
+    // Optional: Show a toast notification or feedback
+    alert(`${product.name} added to cart!`);
+  };
+
+  // Dynamic products shown on homepage (only Active ones from inventory)
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadProducts = async () => {
+      try {
+        setLoadingProducts(true);
+        const res = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/products/`);
+        if (!res.ok) throw new Error("Failed to fetch products");
+        const data = await res.json();
+        if (!isMounted) return;
+        const active = Array.isArray(data)
+          ? data.filter(p => (p && (p.status === 'Active' || p.status === 'active')))
+          : [];
+        setProducts(active);
+      } catch {
+        if (isMounted) setProducts([]);
+      } finally {
+        if (isMounted) setLoadingProducts(false);
+      }
+    };
+    loadProducts();
+    return () => { isMounted = false; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-white-custom">
@@ -231,110 +263,65 @@ const Home = () => {
           </div>
 
           <div className="flex flex-col gap-8 items-center">
-            {/* Miki Card */}
-                        <Card data-aos="fade-left"
-              className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border card-surface-white border-cream-custom menu-card flex flex-col md:flex-row overflow-hidden items-stretch"
-            >
-              <div className="relative overflow-hidden md:w-1/2">
-                <img
-                  src="/canton-style-stir-fried-noodles.jpg"
-                  alt="Miki Noodles"
-                  className="w-full menu-image group-hover:scale-105 transition-transform duration-300"
-                />
-                {/* <Badge
-                  className="absolute top-4 left-4 badge-cream-secondary badge-simple"
-                 >
-                   Chef's Special
-                </Badge> */}
-              </div>
-              <CardContent className="p-6 md:w-1/2">
-                <h3 className="text-5xl font-heavy mb-10 mt-4 text-dark-custom buda-fs-mini">
-                  Miki
-                </h3>
-                <p className="mb-4 leading-relaxed text-secondary-custom">
-                  Fresh egg noodles with rich broth and premium toppings. A classic comfort dish that warms the soul
-                  with every spoonful.
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-heavy text-price-primary">
-                    $12.99/kg
-                  </span>
-                  <Button className="hover:opacity-90 bg-primary-custom text-white-custom badge-simple" >
-                    Order Now
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Lomi Card */}
-                        <Card data-aos="fade-right"
-              className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border card-surface-white border-cream-custom menu-card flex flex-col md:flex-row overflow-hidden items-stretch"
-            >
-              <div className="relative overflow-hidden md:w-1/2">
-                <img
-                  src="/traditional-ramen-noodles-with-egg.jpg"
-                  alt="Lomi Noodles"
-                  className="w-full menu-image group-hover:scale-105 transition-transform duration-300"
-                />
-                {/* <Badge
-                  className="absolute top-4 left-4 badge-cream-secondary badge-simple"
-                 >
-                  Popular
-                </Badge> */}
-              </div>
-              <CardContent className="p-6 md:w-1/2">
-                <h3 className="text-5xl font-heavy mb-10 mt-4 text-dark-custom buda-fs-mini">
-                  Lomi
-                </h3>
-                <p className="mb-4 leading-relaxed text-secondary-custom">
-                  Thick noodles in savory soup with vegetables and meat. A hearty meal that satisfies every craving with
-                  authentic flavors.
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-heavy text-price-primary">
-                    $14.99/kg
-                  </span>
-                  <Button className="hover:opacity-90 bg-primary-custom text-white-custom badge-simple">
-                    Order Now
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Canton Card */}
-                        <Card data-aos="fade-left"
-              className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border card-surface-white border-cream-custom menu-card flex flex-col md:flex-row overflow-hidden items-stretch"
-            >
-              <div className="relative overflow-hidden md:w-1/2">
-                <img
-                  src="/spicy-seafood-noodles-with-shrimp.jpg"
-                  alt="Canton Noodles"
-                  className="w-full menu-image group-hover:scale-105 transition-transform duration-300"
-                />
-                {/* <Badge
-                  className="absolute top-4 left-4 badge-cream-secondary badge-simple"
-                 >
-                  Signature
-                </Badge> */}
-              </div>
-              <CardContent className="p-6 md:w-1/2">
-                <h3 className="text-5xl font-heavy mb-10 mt-4 text-dark-custom buda-fs-mini">
-                  Canton
-                </h3>
-                <p className="mb-4 leading-relaxed text-secondary-custom">
-                  Stir-fried noodles with mixed vegetables and your choice of protein. Bold flavors in every bite with
-                  perfect texture.
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-heavy text-price-primary">
-                    $13.99/kg
-                  </span>
-                  <Button className="hover:opacity-90 bg-primary-custom text-white-custom badge-simple">
-                    Order Now
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {loadingProducts && (
+              <div className="w-full text-center text-secondary-custom">Loading products...</div>
+            )}
+            {!loadingProducts && products.length === 0 && (
+              <div className="w-full text-center text-secondary-custom">No active products available.</div>
+            )}
+            {!loadingProducts && products.map((product, index) => {
+              const imageSrc = product.image
+                ? (product.image.startsWith('http') ? product.image : `${import.meta.env.VITE_INVENTORY_URL}${product.image}`)
+                : '/delicious-noodle-bowl-with-colorful-ingredients.jpg';
+              const fadeDir = index % 2 === 0 ? 'fade-left' : 'fade-right';
+              const priceText = (product.price !== null && product.price !== undefined && `${Number(product.price)}` !== 'NaN')
+                ? `₱${Number(product.price).toFixed(2)}`
+                : '—';
+              return (
+                <Card key={product.id} data-aos={fadeDir}
+                  className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border card-surface-white border-cream-custom menu-card flex flex-col md:flex-row overflow-hidden items-stretch"
+                >
+                  <div className="relative overflow-hidden md:w-1/2">
+                    <img
+                      src={imageSrc}
+                      alt={`${product.name} Image`}
+                      className="w-full menu-image group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => { e.currentTarget.src = '/delicious-noodle-bowl-with-colorful-ingredients.jpg'; }}
+                    />
+                  </div>
+                  <CardContent className="p-6 md:w-1/2">
+                    <h3 className="text-5xl font-heavy mb-4 mt-2 text-dark-custom buda-fs-mini">
+                      {product.name}
+                    </h3>
+                    <p className="mb-4 leading-relaxed text-secondary-custom">
+                      {product.description || 'Delicious noodles prepared fresh daily.'}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl font-heavy text-price-primary">
+                        {priceText}
+                      </span>
+                      <Button
+                        className={`hover:opacity-90 bg-primary-custom text-white-custom badge-simple ${role === 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onClick={() => {
+                          if (!isLoggedIn) { navigate('/login'); return; }
+                          if (role !== 'admin') handleAddToCart(product);
+                        }}
+                        disabled={role === 'admin'}
+                        title={
+                          !isLoggedIn
+                            ? 'Login to place an order'
+                            : role === 'admin'
+                              ? 'Ordering is disabled for admin accounts'
+                              : undefined
+                        }
+                      >
+                        Order Now
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>

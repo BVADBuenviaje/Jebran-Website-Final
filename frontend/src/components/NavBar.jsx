@@ -4,17 +4,18 @@ import logo from "../assets/Logo.svg";
 import StickyHeadroom from "@integreat-app/react-sticky-headroom";
 import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
-import ResellerCartModal from "./ResellerCartModal";
-import AdminCartModal from "./AdminCartModal";
+import { useCart } from "../contexts/CartContext";
 import "./NavBar.css";
+import AdminCartModal from "./AdminCartModal";
 
 export default function Navbar({ role, loadingRole }) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [token, setToken] = useState(localStorage.getItem("access"));
-  const [showCartModal, setShowCartModal] = useState(false);
+  const [showAdminCartModal, setShowAdminCartModal] = useState(false);
+  const [localToken, setLocalToken] = useState(localStorage.getItem("access")); // renamed to avoid conflict
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { getCartItemCount, clearCart, setToken } = useCart();
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -28,11 +29,12 @@ export default function Navbar({ role, loadingRole }) {
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setToken(localStorage.getItem("access"));
+      setLocalToken(localStorage.getItem("access"));
+      setToken(localStorage.getItem("access")); // update context token
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  }, [setToken]);
 
   const handlePageNavigation = (path) => {
     navigate(path);
@@ -67,7 +69,7 @@ export default function Navbar({ role, loadingRole }) {
     { label: "Products", path: "/products" },
     { label: "Ingredients", path: "/ingredients" },
     { label: "Suppliers", path: "/suppliers" },
-    { label: "Resupply Orders", path: "/resupply-orders" }, // Add this line
+    { label: "Resupply Orders", path: "/resupply-orders" },
   ];
 
   // Regular user links
@@ -116,14 +118,37 @@ export default function Navbar({ role, loadingRole }) {
                 </li>
               ))}
             </div>
-            {token && (
+            {localToken && role === "admin" && (
               <li className="navbar-cart">
-                <img 
-                  src={ShoppingCartIcon} 
-                  alt="cart" 
-                  onClick={() => setShowCartModal(true)}
-                  style={{ cursor: 'pointer' }}
-                />
+                <div
+                  className="cart-icon-container"
+                  onClick={() => setShowAdminCartModal(true)}
+                >
+                  <img
+                    src={ShoppingCartIcon}
+                    alt="cart"
+                    style={{ cursor: 'pointer' }}
+                  />
+                </div>
+              </li>
+            )}
+            {localToken && role === "reseller" && (
+              <li className="navbar-cart">
+                <div
+                  className="cart-icon-container"
+                  onClick={() => navigate('/cart')}
+                >
+                  <img
+                    src={ShoppingCartIcon}
+                    alt="cart"
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {getCartItemCount() > 0 && (
+                    <span className="cart-item-count">
+                      {getCartItemCount()}
+                    </span>
+                  )}
+                </div>
               </li>
             )}
             <li className="navbar-user">
@@ -134,14 +159,16 @@ export default function Navbar({ role, loadingRole }) {
               />
               {showDropdown && (
                 <div ref={dropdownRef} className="navbar-dropdown">
-                  {token ? (
+                  {localToken ? (
                     <button
                       className="navbar-dropdown-btn"
                       onClick={() => {
                         localStorage.removeItem("access");
                         localStorage.removeItem("refresh");
                         localStorage.removeItem("username");
-                        setToken(null);
+                        clearCart();
+                        setLocalToken(null); // update local state
+                        setToken(null); // update context token
                         setShowDropdown(false);
                         navigate("/");
                       }}
@@ -170,12 +197,8 @@ export default function Navbar({ role, loadingRole }) {
           </ul>
         </nav>
       </StickyHeadroom>
-      {showCartModal && (
-        role === "reseller" ? (
-          <ResellerCartModal onClose={() => setShowCartModal(false)} />
-        ) : role === "admin" ? (
-          <AdminCartModal onClose={() => setShowCartModal(false)} />
-        ) : null
+      {showAdminCartModal && (
+        <AdminCartModal onClose={() => setShowAdminCartModal(false)} />
       )}
     </>
   );

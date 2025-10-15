@@ -77,9 +77,31 @@
   opacity: 0.8;
 }
 
+.cart-icon-container {
+  position: relative;
+  display: inline-block;
+}
+
 .navbar-cart img {
   width: 1.875rem;
   height: 1.875rem;
+}
+
+.cart-item-count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background-color: #f08b51;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  min-width: 20px;
 }
 
 .navbar-user {

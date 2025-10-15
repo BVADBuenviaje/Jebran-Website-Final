@@ -1,5 +1,7 @@
 from rest_framework import serializers
+import json
 from .models import Ingredient, Supplier, IngredientSupplier
+from .models import Product, ProductIngredient, Cart, CartItem
 from .models import Product, ProductIngredient
 from .models import ResupplyOrder, ResupplyOrderItem
 
@@ -37,10 +39,13 @@ class ProductIngredientReadSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     ingredients = ProductIngredientReadSerializer(source='product_ingredients', many=True, read_only=True)
-    ingredient_items = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
+    # Write: accept JSON string of ingredient items
+    ingredient_items = serializers.CharField(write_only=True, required=False)
+
+    # ingredient_items = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
     class Meta:
         model = Product
-        fields = ["id", "name", "category", "price", "stock", "status", "ingredients", "ingredient_items"]
+        fields = ["id", "name", "price", "status", "description", "image", "ingredients", "ingredient_items"]
 
     def _get_or_create_ingredient(self, name):
         return Ingredient.objects.get_or_create(name=name, defaults={
@@ -64,15 +69,23 @@ class ProductSerializer(serializers.ModelSerializer):
             ProductIngredient.objects.bulk_create(bulk)
 
     def create(self, validated_data):
-        items = validated_data.pop("ingredient_items", [])
+        items_json = validated_data.pop("ingredient_items", "[]")
+        try:
+            items = json.loads(items_json) if items_json else []
+        except json.JSONDecodeError:
+            items = []
         product = super().create(validated_data)
         self._set_items(product, items)
         return product
 
     def update(self, instance, validated_data):
-        items = validated_data.pop("ingredient_items", None)
+        items_json = validated_data.pop("ingredient_items", None)
+        try:
+            items = json.loads(items_json) if items_json else []
+        except json.JSONDecodeError:
+            items = []
         product = super().update(instance, validated_data)
-        if items is not None:
+        if items_json is not None:
             self._set_items(product, items)
         return product
 
@@ -96,3 +109,29 @@ class ResupplyOrderSerializer(serializers.ModelSerializer):
         for item_data in items_data:
             ResupplyOrderItem.objects.create(order=order, **item_data)
         return order
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), write_only=True, source='product')
+    subtotal = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartItem
+        fields = ["id", "product", "product_id", "quantity", "subtotal"]
+
+    def get_subtotal(self, obj):
+        price = obj.product.price or 0
+        return float(price) * obj.quantity
+
+
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
+    total_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cart
+        fields = ["id", "items", "total_price", "created_at"]
+
+    def get_total_price(self, obj):
+        return float(sum((item.product.price or 0) * item.quantity for item in obj.items.all()))
