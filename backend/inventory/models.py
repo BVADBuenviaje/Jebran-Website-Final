@@ -137,3 +137,48 @@ class CartItem(models.Model):
     @property
     def subtotal(self):
         return (self.product.price or 0) * self.quantity
+
+class Order(models.Model):
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Paid', 'Paid'),
+        ('Delivered', 'Delivered'),
+        ('Cancelled', 'Cancelled'),
+    ]
+    
+    PAYMENT_METHOD_CHOICES = [
+        ('COD', 'Cash on Delivery'),
+        ('Online', 'Online Payment'),
+    ]
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="orders")
+    created_at = models.DateTimeField(auto_now_add=True)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='COD')
+    address = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    
+    def __str__(self):
+        return f"Order {self.id} by {self.user.username}"
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Order"
+        verbose_name_plural = "Orders"
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+    price_at_purchase = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    def __str__(self):
+        return f"{self.product.name} × {self.quantity} in Order {self.order.id}"
+    
+    @property
+    def subtotal(self):
+        return self.price_at_purchase * self.quantity
+    
+    class Meta:
+        verbose_name = "Order Item"
+        verbose_name_plural = "Order Items"

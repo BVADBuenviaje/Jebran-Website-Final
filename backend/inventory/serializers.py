@@ -3,7 +3,7 @@ import json
 from .models import Ingredient, Supplier, IngredientSupplier
 from .models import Product, ProductIngredient, Cart, CartItem
 from .models import Product, ProductIngredient
-from .models import ResupplyOrder, ResupplyOrderItem
+from .models import ResupplyOrder, ResupplyOrderItem, Order, OrderItem
 
 class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
@@ -135,3 +135,39 @@ class CartSerializer(serializers.ModelSerializer):
 
     def get_total_price(self, obj):
         return float(sum((item.product.price or 0) * item.quantity for item in obj.items.all()))
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), write_only=True, source='product')
+    subtotal = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = ["id", "product", "product_id", "quantity", "price_at_purchase", "subtotal"]
+
+    def get_subtotal(self, obj):
+        return float(obj.price_at_purchase * obj.quantity)
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+    user = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ["id", "user", "created_at", "total_price", "payment_method", "address", "status", "items"]
+
+    def create(self, validated_data):
+        # This will be handled in the view
+        return super().create(validated_data)
+
+
+class CheckoutSerializer(serializers.Serializer):
+    payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES)
+    address = serializers.CharField(max_length=500)
+    selected_items = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        allow_empty=True
+    )
