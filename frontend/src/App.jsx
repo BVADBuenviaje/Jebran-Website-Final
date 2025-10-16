@@ -11,6 +11,7 @@ import Ingredients from "./pages/Ingredients";
 import Products from "./pages/Products";
 import Cart from "./pages/Cart";
 import AdminCart from "./pages/AdminCart";
+import Checkout from "./pages/Checkout";
 import { CartProvider } from "./contexts/CartContext";
 import { fetchWithAuth } from "./utils/auth";
 
@@ -138,8 +139,11 @@ function AppContent() {
         <Route path="/products" element={<ProtectedProducts />} />
         <Route path="/cart" element={<ProtectedCart />} />
         <Route path="/admin-cart" element={<ProtectedAdminCart />} />
-        <Route path="*" element={<div>404 Not Found</div>} />
         <Route path="/users/:id" element={<UserProfile />} />
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="*" element={<div>404 Not Found</div>} />
+        
+        
       </Routes>
     </>
   );

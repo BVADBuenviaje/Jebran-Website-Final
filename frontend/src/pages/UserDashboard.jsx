@@ -4,7 +4,7 @@ import RoleCheckboxes from "../components/RoleCheckboxes";
 import UserList from "../components/UserList";
 import { fetchWithAuth } from "../utils/auth";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUserShield, faUserTie, faUser, faBan } from "@fortawesome/free-solid-svg-icons";~
+import { faUserShield, faUserTie, faUser, faBan } from "@fortawesome/free-solid-svg-icons";
 
 const UserDashboard = () => {
   const [users, setUsers] = useState([]);
