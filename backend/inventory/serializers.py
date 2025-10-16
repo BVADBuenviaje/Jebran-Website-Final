@@ -2,6 +2,8 @@ from rest_framework import serializers
 import json
 from .models import Ingredient, Supplier, IngredientSupplier
 from .models import Product, ProductIngredient, Cart, CartItem
+from .models import Product, ProductIngredient
+from .models import ResupplyOrder, ResupplyOrderItem, Order, OrderItem
 
 class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
@@ -12,35 +14,35 @@ class SupplierIngredientDetailSerializer(serializers.ModelSerializer):
     ingredient = IngredientSerializer(read_only=True)
     class Meta:
         model = IngredientSupplier
-        fields = ["ingredient", "price", "is_active"]  # <-- Add is_active here
+        fields = ["ingredient", "price", "is_active"]
 
 class SupplierSerializer(serializers.ModelSerializer):
     ingredients_supplied = SupplierIngredientDetailSerializer(
         source="ingredient_suppliers", many=True, read_only=True
     )
-
     class Meta:
         model = Supplier
         fields = "__all__"
 
 class IngredientSupplierSerializer(serializers.ModelSerializer):
+    ingredient = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
+    ingredient_detail = IngredientSerializer(source='ingredient', read_only=True)
     class Meta:
         model = IngredientSupplier
-        fields = ["id", "supplier", "ingredient", "price", "is_active"]
+        fields = ["id", "supplier", "ingredient", "ingredient_detail", "price", "is_active"]
 
 class ProductIngredientReadSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='ingredient.name')
-
     class Meta:
         model = ProductIngredient
         fields = ["name", "quantity", "uom"]
 
 class ProductSerializer(serializers.ModelSerializer):
-    # Read: list ingredient items
     ingredients = ProductIngredientReadSerializer(source='product_ingredients', many=True, read_only=True)
     # Write: accept JSON string of ingredient items
     ingredient_items = serializers.CharField(write_only=True, required=False)
 
+    # ingredient_items = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
     class Meta:
         model = Product
         fields = ["id", "name", "price", "status", "description", "image", "ingredients", "ingredient_items"]
@@ -87,6 +89,27 @@ class ProductSerializer(serializers.ModelSerializer):
             self._set_items(product, items)
         return product
 
+class ResupplyOrderItemSerializer(serializers.ModelSerializer):
+    ingredient_detail = IngredientSerializer(source='ingredient', read_only=True)
+    class Meta:
+        model = ResupplyOrderItem
+        fields = ["ingredient", "ingredient_detail", "quantity"]
+
+class ResupplyOrderSerializer(serializers.ModelSerializer):
+    items = ResupplyOrderItemSerializer(many=True)
+    supplier_detail = SupplierSerializer(source='supplier', read_only=True)
+
+    class Meta:
+        model = ResupplyOrder
+        fields = ["id", "supplier", "supplier_detail", "status", "order_date", "items"]
+
+    def create(self, validated_data):
+        items_data = validated_data.pop("items")
+        order = ResupplyOrder.objects.create(**validated_data)
+        for item_data in items_data:
+            ResupplyOrderItem.objects.create(order=order, **item_data)
+        return order
+
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
@@ -112,3 +135,39 @@ class CartSerializer(serializers.ModelSerializer):
 
     def get_total_price(self, obj):
         return float(sum((item.product.price or 0) * item.quantity for item in obj.items.all()))
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), write_only=True, source='product')
+    subtotal = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = ["id", "product", "product_id", "quantity", "price_at_purchase", "subtotal"]
+
+    def get_subtotal(self, obj):
+        return float(obj.price_at_purchase * obj.quantity)
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+    user = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ["id", "user", "created_at", "total_price", "payment_method", "address", "status", "items"]
+
+    def create(self, validated_data):
+        # This will be handled in the view
+        return super().create(validated_data)
+
+
+class CheckoutSerializer(serializers.Serializer):
+    payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES)
+    address = serializers.CharField(max_length=500)
+    selected_items = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        allow_empty=True
+    )

@@ -1,9 +1,18 @@
 from django.shortcuts import render
 from rest_framework import viewsets, filters
-from .models import Ingredient, Supplier, IngredientSupplier, Cart, CartItem
-from .serializers import IngredientSerializer, SupplierSerializer, IngredientSupplierSerializer, CartSerializer, CartItemSerializer
+from .models import Ingredient, Supplier, IngredientSupplier, Cart, CartItem, Order, OrderItem
+from .serializers import IngredientSerializer, SupplierSerializer, IngredientSupplierSerializer, CartSerializer, CartItemSerializer, OrderSerializer, CheckoutSerializer
+from rest_framework import viewsets, filters, status
+from .models import Ingredient, Supplier, IngredientSupplier, Product, ResupplyOrder
+from .serializers import (
+    IngredientSerializer, SupplierSerializer, IngredientSupplierSerializer,
+    ProductSerializer, ResupplyOrderSerializer
+)
+from django_filters.rest_framework import DjangoFilterBackend
+from django.core.mail import send_mail
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from decimal import Decimal
 from rest_framework import status
 from .models import Product
 from .serializers import ProductSerializer
@@ -33,6 +42,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["name", "email"]
+    filterset_fields = ["is_active"]
 
     def perform_create(self, serializer):
         serializer.save()
@@ -58,7 +68,7 @@ class IngredientSupplierViewSet(viewsets.ModelViewSet):
     serializer_class = IngredientSupplierSerializer
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ["supplier__name", "ingredient__name"]
-    filterset_fields = ["supplier", "ingredient"]  # <-- Add this line
+    filterset_fields = ["supplier", "ingredient", "is_active"]
 
     @action(detail=False, methods=['post'], url_path='deactivate-by-supplier/(?P<supplier_id>[^/.]+)')
     def deactivate_by_supplier(self, request, supplier_id=None):
@@ -131,3 +141,154 @@ class CartViewSet(viewsets.ViewSet):
     def perform_update(self, serializer):
         print("Updating IngredientSupplier for supplier:", serializer.validated_data.get("supplier"))
         serializer.save()
+
+class ResupplyOrderViewSet(viewsets.ModelViewSet):
+    queryset = ResupplyOrder.objects.all()
+    serializer_class = ResupplyOrderSerializer
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    search_fields = ["supplier__name"]
+    filterset_fields = ["status", "supplier"]
+
+    def perform_create(self, serializer):
+        order = serializer.save()
+        supplier_email = order.supplier.email
+        item_lines = [
+            f"- {item.ingredient.name}: {item.quantity} {item.ingredient.unit_of_measurement}"
+            for item in order.items.all()
+        ]
+        subject = "New Resupply Order"
+        message = (
+            f"Dear {order.supplier.name},\n\n"
+            f"You have a new resupply order:\n"
+            + "\n".join(item_lines) +
+            f"\n\nStatus: {order.status}\nDate: {order.order_date.strftime('%Y-%m-%d %H:%M')}\n\n"
+            "Please process this order as soon as possible.\n\n"
+            "Thank you!"
+        )
+        send_mail(subject, message, None, [supplier_email])
+
+    def update(self, request, *args, **kwargs):
+        partial = True
+        instance = self.get_object()
+        old_status = instance.status
+        was_delivered = instance.was_delivered
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        new_status = serializer.validated_data.get("status", instance.status)
+        response = super().update(request, *args, **kwargs)
+        instance.refresh_from_db()  # Get updated was_delivered
+
+        # If status changed to Delivered and not already delivered, add stock
+        if old_status != "Delivered" and new_status == "Delivered" and not was_delivered:
+            for item in instance.items.all():
+                ingredient = item.ingredient
+                ingredient.current_stock = (ingredient.current_stock or Decimal("0")) + (item.quantity or Decimal("0"))
+                ingredient.save()
+            instance.was_delivered = True
+            instance.save()
+        # If status changed from Delivered to Pending or Canceled, revert stock
+        elif old_status == "Delivered" and new_status in ["Pending", "Canceled"] and was_delivered:
+            for item in instance.items.all():
+                ingredient = item.ingredient
+                ingredient.current_stock = (ingredient.current_stock or Decimal("0")) - (item.quantity or Decimal("0"))
+                ingredient.save()
+            instance.was_delivered = False
+            instance.save()
+        return response
+
+
+class OrderViewSet(viewsets.ModelViewSet):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user)
+
+    def list(self, request):
+        orders = self.get_queryset()
+        serializer = self.get_serializer(orders, many=True)
+        return Response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        try:
+            order = self.get_queryset().get(pk=pk)
+            serializer = self.get_serializer(order)
+            return Response(serializer.data)
+        except Order.DoesNotExist:
+            return Response({"detail": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=["post"], url_path="checkout")
+    def checkout(self, request):
+        serializer = CheckoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Get user's cart
+        try:
+            cart = Cart.objects.get(user=request.user)
+        except Cart.DoesNotExist:
+            return Response({"detail": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        cart_items = cart.items.all()
+        if not cart_items.exists():
+            return Response({"detail": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Handle selected items
+        selected_items_data = serializer.validated_data.get('selected_items', [])
+        
+        if selected_items_data:
+            # Filter cart items based on selected items
+            selected_product_ids = [item['product_id'] for item in selected_items_data]
+            selected_quantities = {item['product_id']: item['quantity'] for item in selected_items_data}
+            
+            # Validate that all selected items exist in cart
+            cart_product_ids = set(cart_items.values_list('product_id', flat=True))
+            invalid_ids = set(selected_product_ids) - cart_product_ids
+            if invalid_ids:
+                return Response({"detail": f"Invalid product IDs: {list(invalid_ids)}"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Filter cart items to only selected ones
+            cart_items = cart_items.filter(product_id__in=selected_product_ids)
+            
+            # Update quantities if different from cart
+            for cart_item in cart_items:
+                if cart_item.product_id in selected_quantities:
+                    cart_item.quantity = selected_quantities[cart_item.product_id]
+                    cart_item.save()
+        else:
+            # If no selected items specified, use all cart items
+            pass
+        
+        if not cart_items.exists():
+            return Response({"detail": "No items selected for checkout"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate total price
+        total_price = sum(item.subtotal for item in cart_items)
+        
+        # Create order
+        order = Order.objects.create(
+            user=request.user,
+            total_price=total_price,
+            payment_method=serializer.validated_data['payment_method'],
+            address=serializer.validated_data['address'],
+            status='Pending'
+        )
+        
+        # Create order items
+        for cart_item in cart_items:
+            OrderItem.objects.create(
+                order=order,
+                product=cart_item.product,
+                quantity=cart_item.quantity,
+                price_at_purchase=cart_item.product.price or 0
+            )
+        
+        # Remove only the selected items from cart
+        if selected_items_data:
+            cart_items.delete()
+        else:
+            # If no selection specified, clear entire cart
+            cart.items.all().delete()
+        
+        # Return order details
+        order_serializer = OrderSerializer(order)
+        return Response(order_serializer.data, status=status.HTTP_201_CREATED)

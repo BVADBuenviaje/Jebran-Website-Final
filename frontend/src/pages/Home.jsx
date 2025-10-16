@@ -64,6 +64,7 @@ const Home = () => {
 
   // Handle adding products to cart
   const handleAddToCart = (product) => {
+    console.log("Adding to cart:", product);
     addToCart(product);
     // Optional: Show a toast notification or feedback
     alert(`${product.name} added to cart!`);

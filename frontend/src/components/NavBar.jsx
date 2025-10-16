@@ -6,14 +6,16 @@ import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
 import { useCart } from "../contexts/CartContext";
 import "./NavBar.css";
+import AdminCartModal from "./AdminCartModal";
 
 export default function Navbar({ role, loadingRole }) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [token, setToken] = useState(localStorage.getItem("access"));
+  const [showAdminCartModal, setShowAdminCartModal] = useState(false);
+  const [localToken, setLocalToken] = useState(localStorage.getItem("access")); // renamed to avoid conflict
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { getCartItemCount } = useCart();
+  const { getCartItemCount, clearCart, setToken } = useCart();
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -27,11 +29,12 @@ export default function Navbar({ role, loadingRole }) {
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setToken(localStorage.getItem("access"));
+      setLocalToken(localStorage.getItem("access"));
+      setToken(localStorage.getItem("access")); // update context token
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  }, [setToken]);
 
   const handlePageNavigation = (path) => {
     navigate(path);
@@ -66,6 +69,7 @@ export default function Navbar({ role, loadingRole }) {
     { label: "Products", path: "/products" },
     { label: "Ingredients", path: "/ingredients" },
     { label: "Suppliers", path: "/suppliers" },
+    { label: "Resupply Orders", path: "/resupply-orders" },
   ];
 
   // Regular user links
@@ -90,8 +94,8 @@ export default function Navbar({ role, loadingRole }) {
   return (
     <>
       <StickyHeadroom scrollHeight={500} pinStart={10}>
-        <nav className="navbar">
-          <ul className="navbar-list">
+        <nav className="navbar" style={{ minWidth: "1100px" }}>
+          <ul className="navbar-list" style={{ minWidth: "1100px" }}>
             <li className="navbar-logo">
               <img src={logo} alt="logo" />
             </li>
@@ -114,18 +118,32 @@ export default function Navbar({ role, loadingRole }) {
                 </li>
               ))}
             </div>
-            {token && (role === "reseller" || role === "admin") && (
+            {localToken && role === "admin" && (
               <li className="navbar-cart">
                 <div
                   className="cart-icon-container"
-                  onClick={() => navigate(role === 'admin' ? '/admin-cart' : '/cart')}
+                  onClick={() => setShowAdminCartModal(true)}
                 >
                   <img
                     src={ShoppingCartIcon}
                     alt="cart"
                     style={{ cursor: 'pointer' }}
                   />
-                  {role === 'reseller' && getCartItemCount() > 0 && (
+                </div>
+              </li>
+            )}
+            {localToken && role === "reseller" && (
+              <li className="navbar-cart">
+                <div
+                  className="cart-icon-container"
+                  onClick={() => navigate('/cart')}
+                >
+                  <img
+                    src={ShoppingCartIcon}
+                    alt="cart"
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {getCartItemCount() > 0 && (
                     <span className="cart-item-count">
                       {getCartItemCount()}
                     </span>
@@ -141,7 +159,7 @@ export default function Navbar({ role, loadingRole }) {
               />
               {showDropdown && (
                 <div ref={dropdownRef} className="navbar-dropdown">
-                  {token ? (
+                  {localToken ? (
                     <>
                       <button
                         className="navbar-dropdown-btn"
@@ -162,8 +180,10 @@ export default function Navbar({ role, loadingRole }) {
                           localStorage.removeItem("access");
                           localStorage.removeItem("refresh");
                           localStorage.removeItem("username");
+                        clearCart();
+                        setLocalToken(null); // update local state
                           localStorage.removeItem("user.id");
-                          setToken(null);
+                          setToken(null); // update context token
                           setShowDropdown(false);
                           navigate("/");
                         }}
@@ -193,6 +213,9 @@ export default function Navbar({ role, loadingRole }) {
           </ul>
         </nav>
       </StickyHeadroom>
+      {showAdminCartModal && (
+        <AdminCartModal onClose={() => setShowAdminCartModal(false)} />
+      )}
     </>
   );
 }

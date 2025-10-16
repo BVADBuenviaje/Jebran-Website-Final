@@ -5,8 +5,26 @@ import "./Cart.css";
 
 const Cart = () => {
   const [promoCode, setPromoCode] = useState("");
+  const [showCheckoutForm, setShowCheckoutForm] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("COD");
+  const [address, setAddress] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
-  const { cartItems, updateQuantity, removeFromCart, clearCart } = useCart();
+  const { 
+    cartItems, 
+    selectedItems,
+    updateQuantity, 
+    removeFromCart, 
+    clearCart, 
+    checkout,
+    toggleItemSelection,
+    selectAllItems,
+    deselectAllItems,
+    isItemSelected,
+    getSelectedItems,
+    getSelectedTotal
+  } = useCart();
+  const sortedCartItems = [...cartItems].sort((a, b) => a.id - b.id);
 
   const handleUpdateQuantity = (id, change) => {
     const item = cartItems.find(item => item.id === id);
@@ -24,13 +42,46 @@ const Cart = () => {
     return Number.isFinite(n) ? n : 0;
   };
 
-  const subtotal = cartItems.reduce((sum, item) => sum + toNumber(item.price) * toNumber(item.quantity), 0);
+  const selectedItemsList = getSelectedItems();
+  const subtotal = getSelectedTotal();
   const tax = subtotal * 0.12; // 12% VAT
   const total = subtotal + tax;
 
   const handleCheckout = () => {
-    // Navigate to checkout page or handle checkout logic
-    navigate("/checkout");
+    if (selectedItemsList.length === 0) {
+      alert("Please select items to checkout");
+      return;
+    }
+    setShowCheckoutForm(true);
+  };
+
+  const handleProcessCheckout = async () => {
+    if (!address.trim()) {
+      alert("Please enter a delivery address");
+      return;
+    }
+
+    if (selectedItemsList.length === 0) {
+      alert("Please select items to checkout");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const orderData = await checkout(paymentMethod, address);
+      // Navigate to the new order page
+      navigate(`/orders/${orderData.id}`);
+    } catch (error) {
+      alert(`Checkout failed: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCancelCheckout = () => {
+    setShowCheckoutForm(false);
+    setAddress("");
+    setPaymentMethod("COD");
   };
 
   return (
@@ -57,6 +108,20 @@ const Cart = () => {
                   Clear Items
                 </button>
               )} */}
+              <button 
+                className="view-orders-btn"
+                onClick={() => navigate('/orders')}
+                title="View your order history"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 12l2 2 4-4"/>
+                  <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
+                  <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
+                  <path d="M12 3v6"/>
+                  <path d="M12 15v6"/>
+                </svg>
+                View Orders
+              </button>
               {cartItems.length > 0 && (
                 <button 
                   className="reset-cart-btn"
@@ -67,6 +132,36 @@ const Cart = () => {
                 </button>
               )}
             </div>
+            
+            {/* Selection Controls */}
+            {cartItems.length > 0 && (
+              <div className="cart-selection-controls">
+                <div className="selection-info">
+                  <span className="selection-text">
+                    {selectedItemsList.length} of {cartItems.length} items selected
+                  </span>
+                  <span className="selection-total">
+                    Total: ₱{total.toFixed(2)}
+                  </span>
+                </div>
+                <div className="selection-buttons">
+                  <button 
+                    className="select-all-btn"
+                    onClick={selectAllItems}
+                    disabled={selectedItems.size === cartItems.length}
+                  >
+                    Select All
+                  </button>
+                  <button 
+                    className="deselect-all-btn"
+                    onClick={deselectAllItems}
+                    disabled={selectedItems.size === 0}
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -103,8 +198,18 @@ const Cart = () => {
                     <p className="cart-items-description">Manage quantities and view product details</p>
                   </div>
                   <div className="cart-items-content">
-                    {cartItems.map((item) => (
-                      <div key={item.id} className="cart-item">
+                    {sortedCartItems.map((item) => (
+                      <div key={item.id} className={`cart-item ${isItemSelected(item.id) ? 'selected' : ''}`}>
+                        <div className="cart-item-checkbox">
+                          <input
+                            type="checkbox"
+                            id={`item-${item.id}`}
+                            checked={isItemSelected(item.id)}
+                            onChange={() => toggleItemSelection(item.id)}
+                            className="item-checkbox"
+                          />
+                          <label htmlFor={`item-${item.id}`} className="checkbox-label"></label>
+                        </div>
                         <img
                           src={item.image || "/placeholder.svg"}
                           alt={item.name}
@@ -216,18 +321,102 @@ const Cart = () => {
                   </div>
                 </div>
 
-                <button 
-                  className="checkout-btn" 
-                  onClick={handleCheckout}
-                  disabled={cartItems.length === 0}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="9" cy="21" r="1"/>
-                    <circle cx="20" cy="21" r="1"/>
-                    <path d="m1 1 4 4 13 0 4 14H6l-2-4H1"/>
-                  </svg>
-                  Proceed to Checkout
-                </button>
+                {!showCheckoutForm ? (
+                  <button 
+                    className="checkout-btn" 
+                    onClick={handleCheckout}
+                    disabled={selectedItemsList.length === 0}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="9" cy="21" r="1"/>
+                      <circle cx="20" cy="21" r="1"/>
+                      <path d="m1 1 4 4 13 0 4 14H6l-2-4H1"/>
+                    </svg>
+                    {selectedItemsList.length > 0 
+                      ? `Checkout ${selectedItemsList.length} Item${selectedItemsList.length > 1 ? 's' : ''}`
+                      : 'Select Items to Checkout'
+                    }
+                  </button>
+                ) : (
+                  <div className="checkout-form">
+                    <h4 className="checkout-form-title">Complete Your Order</h4>
+                    
+                    <div className="checkout-form-group">
+                      <label className="checkout-form-label">Payment Method</label>
+                      <div className="payment-method-options">
+                        <label className="payment-option">
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="COD"
+                            checked={paymentMethod === "COD"}
+                            onChange={(e) => setPaymentMethod(e.target.value)}
+                          />
+                          <span className="payment-option-text">
+                            <strong>Cash on Delivery (COD)</strong>
+                            <small>Pay when your order arrives</small>
+                          </span>
+                        </label>
+                        <label className="payment-option">
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="Online"
+                            checked={paymentMethod === "Online"}
+                            onChange={(e) => setPaymentMethod(e.target.value)}
+                          />
+                          <span className="payment-option-text">
+                            <strong>Online Payment</strong>
+                            <small>Pay now with card or digital wallet</small>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="checkout-form-group">
+                      <label className="checkout-form-label">Delivery Address</label>
+                      <textarea
+                        className="checkout-form-textarea"
+                        placeholder="Enter your complete delivery address..."
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        rows="3"
+                        required
+                      />
+                    </div>
+
+                    <div className="checkout-form-actions">
+                      <button 
+                        className="checkout-cancel-btn"
+                        onClick={handleCancelCheckout}
+                        disabled={isProcessing}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        className="checkout-confirm-btn"
+                        onClick={handleProcessCheckout}
+                        disabled={isProcessing || !address.trim()}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <div className="spinner"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M9 12l2 2 4-4"/>
+                              <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
+                              <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
+                            </svg>
+                            Place Order
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="order-summary-features">
                   <div className="feature-item">

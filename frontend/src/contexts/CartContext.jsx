@@ -58,11 +58,12 @@ export const CartProvider = ({ children }) => {
   // ];
 
   const [cartItems, setCartItems] = useState([]);
+  const [selectedItems, setSelectedItems] = useState(new Set());
 
-  // Load cart from backend on mount (if logged in)
+  const [token, setToken] = useState(localStorage.getItem('access'));
+
   useEffect(() => {
-    const token = localStorage.getItem('access');
-    if (!token) return;
+    if (!token) { setCartItems([]); return; }
     let active = true;
     fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/cart/`)
       .then(res => res.ok ? res.json() : null)
@@ -83,7 +84,7 @@ export const CartProvider = ({ children }) => {
       })
       .catch(() => {});
     return () => { active = false; };
-  }, []);
+  }, [token]); // <-- use token state as dependency
 
   const addToCart = async (product) => {
     const token = localStorage.getItem('access');
@@ -168,6 +169,82 @@ export const CartProvider = ({ children }) => {
     setCartItems([]);
   };
 
+  const toggleItemSelection = (productId) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productId)) {
+        newSet.delete(productId);
+      } else {
+        newSet.add(productId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllItems = () => {
+    const allIds = cartItems.map(item => item.id);
+    setSelectedItems(new Set(allIds));
+  };
+
+  const deselectAllItems = () => {
+    setSelectedItems(new Set());
+  };
+
+  const isItemSelected = (productId) => {
+    return selectedItems.has(productId);
+  };
+
+  const getSelectedItems = () => {
+    return cartItems.filter(item => selectedItems.has(item.id));
+  };
+
+  const getSelectedTotal = () => {
+    return getSelectedItems().reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
+  const getSelectedItemCount = () => {
+    return getSelectedItems().reduce((total, item) => total + item.quantity, 0);
+  };
+
+  const checkout = async (paymentMethod, address) => {
+    const token = localStorage.getItem('access');
+    if (!token) throw new Error('Authentication required');
+    
+    const selectedItemsList = getSelectedItems();
+    if (selectedItemsList.length === 0) {
+      throw new Error('Please select items to checkout');
+    }
+    
+    try {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/orders/checkout/`, {
+        method: 'POST',
+        body: JSON.stringify({
+          payment_method: paymentMethod,
+          address: address,
+          selected_items: selectedItemsList.map(item => ({
+            product_id: item.id,
+            quantity: item.quantity
+          }))
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Checkout failed');
+      }
+      
+      const orderData = await response.json();
+      // Remove selected items from cart after successful checkout
+      const remainingItems = cartItems.filter(item => !selectedItems.has(item.id));
+      setCartItems(remainingItems);
+      setSelectedItems(new Set());
+      return orderData;
+    } catch (error) {
+      console.error('Checkout error:', error);
+      throw error;
+    }
+  };
+
   const clearExampleItems = undefined;
   const loadSampleItems = undefined;
 
@@ -189,10 +266,20 @@ export const CartProvider = ({ children }) => {
 
   const value = {
     cartItems,
+    selectedItems,
     addToCart,
     removeFromCart,
     updateQuantity,
     clearCart,
+    checkout,
+    toggleItemSelection,
+    selectAllItems,
+    deselectAllItems,
+    isItemSelected,
+    getSelectedItems,
+    getSelectedTotal,
+    getSelectedItemCount,
+    setToken,
     clearExampleItems,
     loadSampleItems,
     getCartTotal,
