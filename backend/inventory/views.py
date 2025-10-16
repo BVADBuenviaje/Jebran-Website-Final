@@ -202,7 +202,62 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user)
+        user = self.request.user
+        try:
+            # If user has role attribute and is admin, return all orders
+            if getattr(user, 'role', None) == 'admin':
+                return Order.objects.all()
+        except Exception:
+            pass
+        # Default: only the user's own orders
+        return Order.objects.filter(user=user)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = request.user
+        data = request.data.copy()
+
+        # Only allow status change for non-admins, and only to Cancelled from Pending
+        if getattr(user, 'role', None) != 'admin':
+            # Limit updatable fields to 'status' only
+            allowed = {}
+            if 'status' in data:
+                new_status = data.get('status')
+                if new_status != 'Cancelled':
+                    return Response({"detail": "Only cancellation is allowed."}, status=status.HTTP_400_BAD_REQUEST)
+                if instance.status != 'Pending':
+                    return Response({"detail": "Only pending orders can be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+                allowed['status'] = 'Cancelled'
+            else:
+                return Response({"detail": "No updatable fields provided."}, status=status.HTTP_400_BAD_REQUEST)
+            serializer = self.get_serializer(instance, data=allowed, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(serializer.data)
+
+        # Admins can update status freely (other fields are typically managed by system)
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="status")
+    def set_status(self, request, pk=None):
+        instance = self.get_object()
+        new_status = request.data.get("status")
+        if new_status not in dict(Order.STATUS_CHOICES):
+            return Response({"detail": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        if getattr(user, 'role', None) != 'admin':
+            # Non-admins can only cancel their own pending orders
+            if new_status != 'Cancelled' or instance.status != 'Pending' or instance.user_id != user.id:
+                return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        instance.status = new_status
+        instance.save(update_fields=["status"])
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def list(self, request):
         orders = self.get_queryset()

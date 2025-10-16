@@ -13,6 +13,8 @@ export default function Navbar({ role, loadingRole }) {
   const [showAdminCartModal, setShowAdminCartModal] = useState(false);
   const [localToken, setLocalToken] = useState(localStorage.getItem("access")); // renamed to avoid conflict
   const dropdownRef = useRef(null);
+  const inventoryDropdownRef = useRef(null);
+  const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { getCartItemCount, clearCart, setToken } = useCart();
@@ -21,6 +23,9 @@ export default function Navbar({ role, loadingRole }) {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
+      }
+      if (inventoryDropdownRef.current && !inventoryDropdownRef.current.contains(event.target)) {
+        setShowInventoryDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -62,14 +67,22 @@ export default function Navbar({ role, loadingRole }) {
     return location.pathname === path;
   };
 
-  // Admin links
+  // Admin links (with Inventory dropdown)
   const adminLinks = [
     { label: "Home", path: "/" },
     { label: "Users", path: "/dashboard" },
     { label: "Products", path: "/products" },
-    { label: "Ingredients", path: "/ingredients" },
-    { label: "Suppliers", path: "/suppliers" },
-    { label: "Resupply Orders", path: "/resupply-orders" },
+   
+    { label: "Admin Orders", path: "/admin-orders" },
+    {
+      label: "Inventory",
+      type: "dropdown",
+      items: [
+        { label: "Ingredients", path: "/ingredients" },
+        { label: "Suppliers", path: "/suppliers" },
+        { label: "Resupply Orders", path: "/resupply-orders" },
+      ],
+    },
   ];
 
   // Regular user links
@@ -100,23 +113,54 @@ export default function Navbar({ role, loadingRole }) {
               <img src={logo} alt="logo" />
             </li>
             <div className="navbar-links">
-              {linksToShow.map(link => (
-                <li
-                  key={link.label}
-                  className={`navbar-link ${isActive(link.path) ? 'active' : ''}`}
-                  onClick={() => {
-                    if (link.path === "/" || link.path === "/home") {
-                      handleSectionScroll("home");
-                    } else if (link.path.startsWith("/#")) {
-                      handleSectionScroll(link.path.replace("/#", ""));
-                    } else {
-                      handlePageNavigation(link.path);
-                    }
-                  }}
-                >
-                  {link.label}
-                </li>
-              ))}
+              {linksToShow.map(link => {
+                if (link.type === "dropdown") {
+                  return (
+                    <li key={link.label} className={`navbar-link ${showInventoryDropdown ? 'active' : ''}`} ref={inventoryDropdownRef} onClick={() => setShowInventoryDropdown(prev => !prev)} style={{ position: 'relative' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {link.label}
+                        <span className={`chevron ${showInventoryDropdown ? 'open' : ''}`} style={{ display: 'inline-block', transition: 'transform 150ms ease', transform: showInventoryDropdown ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                          ▾
+                        </span>
+                      </span>
+                      {showInventoryDropdown && (
+                        <div className="navbar-dropdown navbar-dropdown-left" style={{ minWidth: 180 }}>
+                          {link.items.map(item => (
+                            <button
+                              key={item.label}
+                              className="navbar-dropdown-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowInventoryDropdown(false);
+                                handlePageNavigation(item.path);
+                              }}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                }
+                return (
+                  <li
+                    key={link.label}
+                    className={`navbar-link ${isActive(link.path) ? 'active' : ''}`}
+                    onClick={() => {
+                      if (link.path === "/" || link.path === "/home") {
+                        handleSectionScroll("home");
+                      } else if (link.path.startsWith("/#")) {
+                        handleSectionScroll(link.path.replace("/#", ""));
+                      } else {
+                        handlePageNavigation(link.path);
+                      }
+                    }}
+                  >
+                    {link.label}
+                  </li>
+                );
+              })}
             </div>
             {localToken && role === "admin" && (
               <li className="navbar-cart">

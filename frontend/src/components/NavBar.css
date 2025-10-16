@@ -128,6 +128,12 @@
   padding: 0.5rem 0;
 }
 
+/* Left-aligned variant for nav dropdowns anchored under a link */
+.navbar-dropdown-left {
+  right: auto;
+  left: 0;
+}
+
 .navbar-dropdown-btn {
   display: block;
   width: 100%;
