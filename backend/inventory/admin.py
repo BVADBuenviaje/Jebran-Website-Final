@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Ingredient, Supplier, IngredientSupplier, Product, ResupplyOrder, ResupplyOrderItem
+from .models import Ingredient, Supplier, IngredientSupplier, Product, ResupplyOrder, ResupplyOrderItem, Order, OrderItem
 
 @admin.register(Ingredient)
 class IngredientAdmin(admin.ModelAdmin):
@@ -36,3 +36,29 @@ class ResupplyOrderItemAdmin(admin.ModelAdmin):
     list_display = ("order", "ingredient", "quantity")
     search_fields = ("order__id", "ingredient__name")
     list_filter = ("ingredient",)
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+    readonly_fields = ['product', 'quantity', 'price_at_purchase', 'subtotal']
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'payment_method', 'total_price', 'status', 'created_at']
+    list_editable = ['status']  # 👈 Allows admin to mark Delivered, Paid, etc.
+    list_filter = ['status', 'payment_method', 'created_at']
+    search_fields = ['user__username', 'id']
+    inlines = [OrderItemInline]
+    readonly_fields = ['user', 'payment_method', 'total_price', 'created_at', 'address']
+
+    def has_add_permission(self, request):
+        # prevent admins from manually creating orders (only view/update)
+        return False
+
+    def get_queryset(self, request):
+        # ensures admin can view all reseller orders
+        qs = super().get_queryset(request)
+        return qs.select_related('user').prefetch_related('items', 'items__product')
+
+    def subtotal(self, obj):
+        return obj.total_price

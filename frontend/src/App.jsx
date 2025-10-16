@@ -13,6 +13,7 @@ import Cart from "./pages/Cart";
 import AdminCart from "./pages/AdminCart";
 import Checkout from "./pages/Checkout";
 import { CartProvider } from "./contexts/CartContext";
+import AdminOrders from "./pages/AdminOrders";
 import ResupplyOrders from "./pages/ResupplyOrders"; // Add this import
 import Orders from "./pages/Orders"; // Add this import
 import { fetchWithAuth } from "./utils/auth";
@@ -125,6 +126,18 @@ function AppContent() {
     return <AdminCart />;
   };
 
+  const ProtectedAdminOrders = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "admin") return <Navigate to="/" />;
+    return <AdminOrders />;
+  };
+
   const ProtectedResupplyOrders = () => {
     if (!token) return <Navigate to="/login" />;
     if (loadingRole) return (
@@ -166,6 +179,7 @@ function AppContent() {
         <Route path="/cart" element={<ProtectedCart />} />
         <Route path="/admin-cart" element={<ProtectedAdminCart />} />
         <Route path="/resupply-orders" element={<ProtectedResupplyOrders />} /> {/* Add this line */}
+        <Route path="/admin-orders" element={<ProtectedAdminOrders />} />
         <Route path="/orders" element={<ProtectedOrders />} />
         <Route path="/orders/:id" element={<ProtectedOrders />} />
         <Route path="/users/:id" element={<UserProfile />} />
