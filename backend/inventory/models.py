@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+
 class Ingredient(models.Model):
     name = models.CharField(max_length=100, unique=True)
     unit_of_measurement = models.CharField(max_length=20, help_text="e.g. kg, liter, piece")
@@ -137,26 +138,37 @@ class CartItem(models.Model):
     @property
     def subtotal(self):
         return (self.product.price or 0) * self.quantity
+    
+PAYMENT_METHOD_CHOICES = [
+        ('COD', 'Cash on Delivery'),
+        ('Online', 'Online Payment'),
+        ('GCash', 'gcash'),
+    ]
+    
+PAYMENT_STATUS_CHOICES = [
+        ("Unpaid", "Unpaid"),
+        ("Paid", "Paid"),
+        ("Pending", "Pending"),
+        ("Failed", "Failed"),
+        ("Refunded", "Refunded"),
+    ]
 
 class Order(models.Model):
     STATUS_CHOICES = [
         ('Pending', 'Pending'),
-        ('Paid', 'Paid'),
         ('Delivered', 'Delivered'),
         ('Cancelled', 'Cancelled'),
+        ('Delivery Failed', 'Delivery Failed'),
     ]
     
-    PAYMENT_METHOD_CHOICES = [
-        ('COD', 'Cash on Delivery'),
-        ('Online', 'Online Payment'),
-    ]
-    
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="orders")
     created_at = models.DateTimeField(auto_now_add=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='COD')
     address = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    payment_reference = models.CharField(max_length=255, blank=True, null=True)
     
     def __str__(self):
         return f"Order {self.id} by {self.user.username}"
@@ -182,3 +194,19 @@ class OrderItem(models.Model):
     class Meta:
         verbose_name = "Order Item"
         verbose_name_plural = "Order Items"
+        
+class Sale(models.Model):
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="sale",
+        help_text="Order associated with this sale"
+    )
+    total_paid = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    payment_reference = models.CharField(max_length=255, blank=True, null=True)
+    payment_date = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Sale #{self.id} — Order #{self.order.id} — {self.payment_status} — {self.amount}"

@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, filters
 from .models import Ingredient, Supplier, IngredientSupplier, Cart, CartItem, Order, OrderItem
 from .serializers import IngredientSerializer, SupplierSerializer, IngredientSupplierSerializer, CartSerializer, CartItemSerializer, OrderSerializer, CheckoutSerializer
@@ -8,7 +9,6 @@ from .serializers import (
     IngredientSerializer, SupplierSerializer, IngredientSupplierSerializer,
     ProductSerializer, ResupplyOrderSerializer
 )
-from django_filters.rest_framework import DjangoFilterBackend
 from django.core.mail import send_mail
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16,8 +16,15 @@ from decimal import Decimal
 from rest_framework import status
 from .models import Product
 from .serializers import ProductSerializer
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from .models import Sale
+from .serializers import SaleSerializer, PaymentConfirmSerializer
+from django.db import transaction
+from django.db.models import Sum, Count
+from datetime import timedelta
+from django.utils import timezone
 
 class IngredientViewSet(viewsets.ModelViewSet):
     queryset = Ingredient.objects.all()
@@ -202,6 +209,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        user = self.request.user
+        
+        if user.is_staff:
+            return Order.objects.all()
         return Order.objects.filter(user=self.request.user)
 
     def list(self, request):
@@ -292,3 +303,82 @@ class OrderViewSet(viewsets.ModelViewSet):
         # Return order details
         order_serializer = OrderSerializer(order)
         return Response(order_serializer.data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=["post"], url_path="confirm-payment", permission_classes=[IsAuthenticated])
+    def confirm_payment(self, request, pk=None):
+        """
+        Confirm or update payment for an order.
+        Admins can confirm any order; users can mark their own orders as 'Paid' only if allowed.
+        If payment_status == 'Paid' and no Sale exists, a Sale record is created.
+        """
+        order = self.get_object()
+
+        # Basic permission: staff can confirm any; otherwise user must own the order
+        if not (request.user.is_staff or order.user == request.user):
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = PaymentConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            order.payment_method = data["payment_method"]
+            order.payment_status = data["payment_status"]
+            order.payment_reference = data.get("payment_reference", "") or ""
+            order.save(update_fields=["payment_method", "payment_status", "payment_reference"])
+
+            # Create Sale when payment becomes PAID and sale doesn't exist
+            if order.payment_status == "PAID":
+                # Only create sale if not already present
+                if not hasattr(order, "sale"):
+                    sale = Sale.objects.create(
+                        order=order,
+                        amount=getattr(order, "total_price", 0) or 0,
+                        payment_method=order.payment_method,
+                        payment_status=order.payment_status,
+                        payment_reference=order.payment_reference or "",
+                        handled_by=request.user if request.user.is_staff else None,
+                        notes=data.get("notes", "")
+                    )
+                else:
+                    # Update existing sale status/reference if necessary
+                    sale = order.sale
+                    sale.payment_status = order.payment_status
+                    sale.payment_reference = order.payment_reference or ""
+                    sale.notes = (sale.notes or "") + ("\n" + (data.get("notes") or "")) if data.get("notes") else sale.notes
+                    sale.save()
+
+        return Response({"detail": "Payment updated", "order_id": order.id}, status=status.HTTP_200_OK)
+    
+class SalesViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Sale.objects.all().order_by("-payment_date")
+    serializer_class = SaleSerializer
+    permission_classes = [IsAdminUser]  # restrict to admins
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """
+        Returns simple sales summary for the last X days (default 7)
+        {
+          total_revenue: ...,
+          total_sales: ...,
+          by_method: { "GCASH": {count, revenue}, "COD": {...} }
+        }
+        """
+        days = int(request.query_params.get("days", 7))
+        since = timezone.now() - timedelta(days=days)
+        qs = Sale.objects.filter(payment_date__gte=since)
+
+        totals = qs.aggregate(total_revenue=Sum("amount"), total_sales=Count("id"))
+        by_method = qs.values("payment_method").annotate(
+            count=Count("id"),
+            revenue=Sum("amount")
+        )
+
+        by_method_dict = {b["payment_method"]: {"count": b["count"], "revenue": float(b["revenue"] or 0)} for b in by_method}
+
+        return Response({
+            "total_revenue": float(totals["total_revenue"] or 0),
+            "total_sales": totals["total_sales"] or 0,
+            "by_method": by_method_dict
+        })

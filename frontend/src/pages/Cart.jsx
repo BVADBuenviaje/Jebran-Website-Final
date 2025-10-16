@@ -5,10 +5,6 @@ import "./Cart.css";
 
 const Cart = () => {
   const [promoCode, setPromoCode] = useState("");
-  const [showCheckoutForm, setShowCheckoutForm] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("COD");
-  const [address, setAddress] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
   const { 
     cartItems, 
@@ -16,7 +12,6 @@ const Cart = () => {
     updateQuantity, 
     removeFromCart, 
     clearCart, 
-    checkout,
     toggleItemSelection,
     selectAllItems,
     deselectAllItems,
@@ -52,36 +47,8 @@ const Cart = () => {
       alert("Please select items to checkout");
       return;
     }
-    setShowCheckoutForm(true);
-  };
-
-  const handleProcessCheckout = async () => {
-    if (!address.trim()) {
-      alert("Please enter a delivery address");
-      return;
-    }
-
-    if (selectedItemsList.length === 0) {
-      alert("Please select items to checkout");
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const orderData = await checkout(paymentMethod, address);
-      // Navigate to the new order page
-      navigate(`/orders/${orderData.id}`);
-    } catch (error) {
-      alert(`Checkout failed: ${error.message}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleCancelCheckout = () => {
-    setShowCheckoutForm(false);
-    setAddress("");
-    setPaymentMethod("COD");
+    // navigate to the dedicated checkout page (checkout logic moved there)
+    navigate("/checkout");
   };
 
   return (
@@ -89,25 +56,10 @@ const Cart = () => {
       <div className="cart-container">
         {/* Header */}
         <div className="cart-header">
-          {/* <Link to="/products" className="continue-shopping-btn">
-            <svg className="arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-            Continue Shopping
-          </Link> */}
           <div className="cart-title-section">
             <h1 className="cart-title">Shopping Cart</h1>
             <p className="cart-subtitle">Review your order and proceed to checkout</p>
             <div className="cart-header-buttons">
-              {/* {cartItems.length > 0 && cartItems.some(item => [1, 2, 3].includes(item.id)) && (
-                <button 
-                  className="clear-example-btn"
-                  onClick={clearExampleItems}
-                  title="Remove example items and start fresh"
-                >
-                  Clear Items
-                </button>
-              )} */}
               <button 
                 className="view-orders-btn"
                 onClick={() => navigate('/orders')}
@@ -258,8 +210,6 @@ const Cart = () => {
                                   </svg>
                                 </button>
                               </div>
-
-
                             </div>
 
                             <div className="cart-item-pricing">
@@ -321,102 +271,21 @@ const Cart = () => {
                   </div>
                 </div>
 
-                {!showCheckoutForm ? (
-                  <button 
-                    className="checkout-btn" 
-                    onClick={handleCheckout}
-                    disabled={selectedItemsList.length === 0}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="9" cy="21" r="1"/>
-                      <circle cx="20" cy="21" r="1"/>
-                      <path d="m1 1 4 4 13 0 4 14H6l-2-4H1"/>
-                    </svg>
-                    {selectedItemsList.length > 0 
-                      ? `Checkout ${selectedItemsList.length} Item${selectedItemsList.length > 1 ? 's' : ''}`
-                      : 'Select Items to Checkout'
-                    }
-                  </button>
-                ) : (
-                  <div className="checkout-form">
-                    <h4 className="checkout-form-title">Complete Your Order</h4>
-                    
-                    <div className="checkout-form-group">
-                      <label className="checkout-form-label">Payment Method</label>
-                      <div className="payment-method-options">
-                        <label className="payment-option">
-                          <input
-                            type="radio"
-                            name="paymentMethod"
-                            value="COD"
-                            checked={paymentMethod === "COD"}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
-                          />
-                          <span className="payment-option-text">
-                            <strong>Cash on Delivery (COD)</strong>
-                            <small>Pay when your order arrives</small>
-                          </span>
-                        </label>
-                        <label className="payment-option">
-                          <input
-                            type="radio"
-                            name="paymentMethod"
-                            value="Online"
-                            checked={paymentMethod === "Online"}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
-                          />
-                          <span className="payment-option-text">
-                            <strong>Online Payment</strong>
-                            <small>Pay now with card or digital wallet</small>
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="checkout-form-group">
-                      <label className="checkout-form-label">Delivery Address</label>
-                      <textarea
-                        className="checkout-form-textarea"
-                        placeholder="Enter your complete delivery address..."
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        rows="3"
-                        required
-                      />
-                    </div>
-
-                    <div className="checkout-form-actions">
-                      <button 
-                        className="checkout-cancel-btn"
-                        onClick={handleCancelCheckout}
-                        disabled={isProcessing}
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        className="checkout-confirm-btn"
-                        onClick={handleProcessCheckout}
-                        disabled={isProcessing || !address.trim()}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <div className="spinner"></div>
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M9 12l2 2 4-4"/>
-                              <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
-                              <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
-                            </svg>
-                            Place Order
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <button 
+                  className="checkout-btn" 
+                  onClick={handleCheckout}
+                  disabled={selectedItemsList.length === 0}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="9" cy="21" r="1"/>
+                    <circle cx="20" cy="21" r="1"/>
+                    <path d="m1 1 4 4 13 0 4 14H6l-2-4H1"/>
+                  </svg>
+                  {selectedItemsList.length > 0 
+                    ? `Checkout ${selectedItemsList.length} Item${selectedItemsList.length > 1 ? 's' : ''}`
+                    : 'Select Items to Checkout'
+                  }
+                </button>
 
                 <div className="order-summary-features">
                   <div className="feature-item">

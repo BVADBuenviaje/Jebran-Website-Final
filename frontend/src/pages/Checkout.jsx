@@ -5,11 +5,26 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ShoppingBag, Wallet, MapPin } from "lucide-react";
 
 const Checkout = () => {
-  const { cartItems, clearCart } = useCart();
+  const { cartItems, clearCart, getSelectedItems, getSelectedTotal, checkout } = useCart();
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [address, setAddress] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
+
+  // helper: safely convert values to numbers
+  const toNumber = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  // selected items come from cart context (selected for checkout) or fallback to cartItems
+  const selectedItems = (getSelectedItems && getSelectedItems()) || cartItems;
+  const subtotal = (getSelectedTotal && getSelectedTotal()) || selectedItems.reduce((s, i) => s + toNumber(i.price) * toNumber(i.quantity), 0);
+  const tax = subtotal * 0.12;
+  const shipping = subtotal > 0 ? 50 : 0;
+  const total = subtotal + tax + shipping;
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -25,47 +40,41 @@ const Checkout = () => {
         .then((data) => {
           setUser(data);
           setLoading(false);
-        });
+        })
+        .catch(() => setLoading(false));
     } else {
       setLoading(false);
     }
   }, []);
 
-  const toNumber = (value) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  };
+  useEffect(() => {
+    // if no selected items, send user back to cart
+    if (!selectedItems || selectedItems.length === 0) {
+      navigate("/cart");
+    }
+  }, []); // run once on mount
 
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + toNumber(item.price) * toNumber(item.quantity),
-    0
-  );
-  const tax = subtotal * 0.12;
-  const shipping = subtotal > 0 ? 50 : 0;
-  const total = subtotal + tax + shipping;
+  const handleProcessCheckout = async () => {
+    if (!selectedItems || selectedItems.length === 0) {
+      alert("No items selected for checkout.");
+      return;
+    }
 
-  const handlePlaceOrder = async () => {
-    const res = await fetchWithAuth(
-      `${import.meta.env.VITE_INVENTORY_URL}/orders/place/`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          payment_method: paymentMethod,
-          total_amount: total,
-        }),
-      }
-    );
+    const shippingAddress = user && user.shop_address ? user.shop_address : address.trim();
+    if (!shippingAddress) {
+      alert("Please enter a delivery address or add a business address to your account.");
+      return;
+    }
 
-    if (res.ok) {
-      if (paymentMethod === "cod") {
-        alert("Order placed! Pay upon delivery.");
-        clearCart();
-        navigate("/");
-      } else {
-        alert("Redirecting to GCash...");
-      }
-    } else {
-      alert("Failed to place order.");
+    setIsProcessing(true);
+    try {
+      const orderData = await checkout(paymentMethod, shippingAddress);
+      // Navigate to the new order page
+      navigate(`/orders/${orderData.id}`);
+    } catch (error) {
+      alert(`Checkout failed: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -112,13 +121,13 @@ const Checkout = () => {
               </h3>
             </div>
 
-            {cartItems.length === 0 ? (
+            {selectedItems.length === 0 ? (
               <p className="text-muted-foreground text-center">
                 Your cart is empty.
               </p>
             ) : (
               <div className="space-y-4">
-                {cartItems.map((item) => (
+                {selectedItems.map((item) => (
                   <div
                     key={item.id}
                     className="flex items-center gap-4 p-4 bg-muted rounded-lg"
@@ -150,7 +159,7 @@ const Checkout = () => {
             )}
 
             {/* Pricing Breakdown */}
-            {cartItems.length > 0 && (
+            {selectedItems.length > 0 && (
               <div className="space-y-2 pt-4 border-t border-border">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
@@ -202,8 +211,8 @@ const Checkout = () => {
                     type="radio"
                     name="payment"
                     value="cod"
-                    checked={paymentMethod === "cod"}
-                    onChange={() => setPaymentMethod("cod")}
+                    checked={paymentMethod === "COD"}
+                    onChange={() => setPaymentMethod("COD")}
                     className="w-4 h-4 accent-[#B8705F]"
                   />
                   <div className="w-12 h-12 bg-gradient-to-br from-amber-100 to-amber-200 rounded flex items-center justify-center flex-shrink-0">
@@ -229,9 +238,9 @@ const Checkout = () => {
                   <input
                     type="radio"
                     name="payment"
-                    value="gcash"
-                    checked={paymentMethod === "gcash"}
-                    onChange={() => setPaymentMethod("gcash")}
+                    value="GCash"
+                    checked={paymentMethod === "GCash"}
+                    onChange={() => setPaymentMethod("GCash")}
                     className="w-4 h-4 accent-[#B8705F]"
                   />
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded flex items-center justify-center flex-shrink-0">
@@ -257,11 +266,11 @@ const Checkout = () => {
           {/* Place Order Button */}
           <div className="pt-6 border-t border-border mt-8">
             <button
-              onClick={handlePlaceOrder}
+              onClick={handleProcessCheckout}
               className="w-full bg-[#B8705F] hover:bg-[#A05F4F] text-white h-12 text-base rounded-lg transition-colors font-semibold"
-              disabled={cartItems.length === 0}
+              disabled={selectedItems.length === 0 || isProcessing}
             >
-              Place Order
+              {isProcessing ? "Processing..." : "Place Order"}
             </button>
             <p className="text-xs text-center text-muted-foreground mt-4">
               By placing your order, you agree to our terms and conditions

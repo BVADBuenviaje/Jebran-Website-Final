@@ -4,6 +4,8 @@ from .models import Ingredient, Supplier, IngredientSupplier
 from .models import Product, ProductIngredient, Cart, CartItem
 from .models import Product, ProductIngredient
 from .models import ResupplyOrder, ResupplyOrderItem, Order, OrderItem
+from rest_framework import serializers
+from .models import Sale, Order, PAYMENT_METHOD_CHOICES, PAYMENT_STATUS_CHOICES
 
 class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
@@ -164,10 +166,25 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class CheckoutSerializer(serializers.Serializer):
-    payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES)
+    payment_method = serializers.ChoiceField(choices=PAYMENT_METHOD_CHOICES)
     address = serializers.CharField(max_length=500)
     selected_items = serializers.ListField(
         child=serializers.DictField(),
         required=False,
         allow_empty=True
     )
+
+class SaleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Sale
+        fields = [
+            "id", "order", "total_paid", "payment_method", "payment_status",
+            "payment_reference", "payment_date", "notes"
+        ]
+        read_only_fields = ["id", "order", "total_paid", "payment_date"]
+
+class PaymentConfirmSerializer(serializers.Serializer):
+    payment_method = serializers.ChoiceField(choices=PAYMENT_METHOD_CHOICES)
+    payment_status = serializers.ChoiceField(choices=PAYMENT_STATUS_CHOICES)
+    payment_reference = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)

@@ -218,6 +218,9 @@ export const CartProvider = ({ children }) => {
     try {
       const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/orders/checkout/`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           payment_method: paymentMethod,
           address: address,
@@ -230,8 +233,10 @@ export const CartProvider = ({ children }) => {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Checkout failed');
+        console.error("CHECKOUT ERROR BODY:", errorData); 
+        throw new Error(JSON.stringify(errorData)); 
       }
+
       
       const orderData = await response.json();
       // Remove selected items from cart after successful checkout
