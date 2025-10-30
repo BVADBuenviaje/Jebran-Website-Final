@@ -5,7 +5,7 @@ from .models import Product, ProductIngredient, Cart, CartItem
 from .models import Product, ProductIngredient
 from .models import ResupplyOrder, ResupplyOrderItem, Order, OrderItem
 from rest_framework import serializers
-from .models import Sale, Order, PAYMENT_METHOD_CHOICES, PAYMENT_STATUS_CHOICES
+from .models import Sale, Order, CheckoutSession, PAYMENT_METHOD_CHOICES, PAYMENT_STATUS_CHOICES
 
 class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
@@ -158,7 +158,12 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ["id", "user", "created_at", "total_price", "payment_method", "address", "status", "items"]
+        fields = [
+            "id", "user", "created_at", "total_price", "payment_method", "payment_status", 
+            "address", "status", "payment_reference", "items", "is_temporary",
+            "paymongo_payment_intent_id", "paymongo_payment_method_id", 
+            "paymongo_client_key", "paymongo_status"
+        ]
 
     def create(self, validated_data):
         # This will be handled in the view
@@ -175,16 +180,25 @@ class CheckoutSerializer(serializers.Serializer):
     )
 
 class SaleSerializer(serializers.ModelSerializer):
+    order_details = OrderSerializer(source='order', read_only=True)
+    handled_by_name = serializers.CharField(source='handled_by.username', read_only=True)
+    
     class Meta:
         model = Sale
         fields = [
-            "id", "order", "total_paid", "payment_method", "payment_status",
-            "payment_reference", "payment_date", "notes"
+            "id", "order", "order_details", "total_paid", "payment_method", "payment_status",
+            "payment_reference", "payment_date", "handled_by", "handled_by_name", "notes"
         ]
-        read_only_fields = ["id", "order", "total_paid", "payment_date"]
+        read_only_fields = ["id", "order", "total_paid", "payment_date", "handled_by"]
 
 class PaymentConfirmSerializer(serializers.Serializer):
     payment_method = serializers.ChoiceField(choices=PAYMENT_METHOD_CHOICES)
     payment_status = serializers.ChoiceField(choices=PAYMENT_STATUS_CHOICES)
     payment_reference = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+class CheckoutSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CheckoutSession
+        fields = "__all__"
+        read_only_fields = ("id", "paymongo_session_id", "status", "created_at", "metadata")

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Search, MoreHorizontal, Package, DollarSign, Clock, User, MapPin } from "lucide-react";
+import { ArrowLeft, Search, MoreHorizontal, Package, Clock, User, MapPin } from "lucide-react";
 import { fetchWithAuth } from "../utils/auth";
 
 // Fallback example data (used only if API fails)
@@ -46,6 +46,9 @@ export default function AdminOrders() {
             customer: { name: o.user || "Reseller", email: "" },
             date: o.created_at ? new Date(o.created_at).toISOString().slice(0, 10) : "",
             status: o.status || "Pending",
+            payment_status: o.payment_status || "Unpaid",
+            payment_method: o.payment_method || "COD",
+            payment_reference: o.payment_reference || "",
             items: (o.items || []).map((it) => ({
               name: it.product?.name || "",
               quantity: it.quantity,
@@ -82,9 +85,6 @@ export default function AdminOrders() {
   }, [searchTerm, statusFilter, orders]);
 
   const totalOrders = orders.length;
-  const totalRevenue = orders
-    .filter((o) => (o.status || '').toLowerCase() === 'delivered')
-    .reduce((sum, order) => sum + order.total, 0);
   const pendingOrders = orders.filter((o) => o.status === "Pending" || o.status === "Processing").length;
 
   const updateStatusWithConfirm = async (order, nextStatus) => {
@@ -116,6 +116,9 @@ export default function AdminOrders() {
           customer: { name: o.user || "Reseller", email: "" },
           date: o.created_at ? new Date(o.created_at).toISOString().slice(0, 10) : "",
           status: o.status || "Pending",
+          payment_status: o.payment_status || "Unpaid",
+          payment_method: o.payment_method || "COD",
+          payment_reference: o.payment_reference || "",
           items: (o.items || []).map((it) => ({
             name: it.product?.name || "",
             quantity: it.quantity,
@@ -171,17 +174,6 @@ export default function AdminOrders() {
 
           <div className="rounded-xl border border-gray-200 bg-white">
             <div className="flex items-center justify-between px-5 pt-5">
-              <div className="text-sm font-medium text-gray-600">Total Revenue</div>
-              <DollarSign className="h-4 w-4 text-gray-400" />
-            </div>
-            <div className="px-5 pb-5">
-              <div className="text-2xl font-bold text-gray-900">₱{totalRevenue.toLocaleString()}</div>
-              <p className="text-xs text-gray-500"><span className="text-blue-600 font-medium">+15%</span> from last week</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-5 pt-5">
               <div className="text-sm font-medium text-gray-600">Pending Orders</div>
               <Clock className="h-4 w-4 text-gray-400" />
             </div>
@@ -232,7 +224,8 @@ export default function AdminOrders() {
                     <th className="px-4 py-3 font-medium">Order ID</th>
                     <th className="px-4 py-3 font-medium">Customer</th>
                     <th className="px-4 py-3 font-medium">Date</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Order Status</th>
+                    <th className="px-4 py-3 font-medium">Payment Status</th>
                     <th className="px-4 py-3 font-medium">Items</th>
                     <th className="px-4 py-3 font-medium">Total</th>
                     <th className="px-4 py-3 font-medium"></th>
@@ -252,6 +245,15 @@ export default function AdminOrders() {
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${getStatusBadgeClasses(order.status)}`}>
                           {order.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${
+                          order.payment_status === 'Paid' ? 'bg-green-100 text-green-700 border-green-200' :
+                          order.payment_status === 'Unpaid' ? 'bg-red-100 text-red-700 border-red-200' :
+                          'bg-yellow-100 text-yellow-700 border-yellow-200'
+                        }`}>
+                          {order.payment_status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-700">
@@ -333,22 +335,31 @@ export default function AdminOrders() {
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 flex flex-col md:flex-row md:justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>Current status:</span>
-                <span className="font-medium">{selectedOrder.status}</span>
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <div>
+                  <span>Order Status:</span>
+                  <span className="font-medium ml-1">{selectedOrder.status}</span>
+                </div>
+                <div>
+                  <span>Payment Status:</span>
+                  <span className="font-medium ml-1">{selectedOrder.payment_status}</span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                {selectedOrder.status !== 'Pending' && (
-                  <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Pending')} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Mark Pending</button>
-                )}
-                {selectedOrder.status !== 'Paid' && (
+                {/* Payment Status Buttons */}
+                {selectedOrder.payment_status !== 'Paid' && (
                   <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Paid')} className="px-3 py-2 rounded-md border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100">Mark Paid</button>
                 )}
+                {selectedOrder.payment_status !== 'Unpaid' && (
+                  <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Unpaid')} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Mark Unpaid</button>
+                )}
+                
+                {/* Order Status Buttons */}
                 {selectedOrder.status !== 'Delivered' && (
                   <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Delivered')} className="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">Mark Delivered</button>
                 )}
                 {selectedOrder.status !== 'Cancelled' && (
-                  <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Cancelled')} className="px-3 py-2 rounded-md border border-red-300 text-white bg-red-600 hover:bg-red-700">Cancel</button>
+                  <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Cancelled')} className="px-3 py-2 rounded-md border border-red-300 text-white bg-red-600 hover:bg-red-700">Cancel Order</button>
                 )}
                 <button onClick={() => setSelectedOrder(null)} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Close</button>
               </div>
@@ -361,5 +372,6 @@ export default function AdminOrders() {
     </div>
   );
 }
+
 
 

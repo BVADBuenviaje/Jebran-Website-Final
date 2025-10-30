@@ -22,7 +22,7 @@ environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 # core settings
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG")
-ALLOWED_HOSTS = [h.strip() for h in env("ALLOWED_HOSTS", default="").split(",") if h.strip()]
+ALLOWED_HOSTS = [h.strip() for h in env("ALLOWED_HOSTS", default="").split(",") if h.strip()] + ["disordered-unnarrowly-shirleen.ngrok-free.dev"]
 
 
 # Application definition
@@ -145,7 +145,7 @@ REST_FRAMEWORK = {
 # CORS / CSRF for React (Vite) dev server
 # ------------------------------------------------------------------------------
 # CORS for your React dev server(s)
-CORS_ALLOWED_ORIGINS = [o.strip() for o in env("CORS_ORIGINS", default="").split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = [o.strip() for o in env("CORS_ORIGINS", default="").split(",") if o.strip()] + ["https://disordered-unnarrowly-shirleen.ngrok-free.dev"]
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True  # needed if you send cookies from React
 
@@ -170,3 +170,14 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = env("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
+
+# -------------------------------------------------------------------
+# PayMongo Configuration
+# -------------------------------------------------------------------
+PAYMONGO_SECRET_KEY = env('PAYMONGO_SECRET_KEY')
+PAYMONGO_PUBLIC_KEY = env('PAYMONGO_PUBLIC_KEY')
+PAYMONGO_WEBHOOK_SECRET = env('PAYMONGO_WEBHOOK_SECRET')
+PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1'
+
+# Frontend URL for redirects
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')

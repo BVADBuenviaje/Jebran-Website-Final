@@ -166,9 +166,19 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='COD')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='Unpaid')
     address = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     payment_reference = models.CharField(max_length=255, blank=True, null=True)
+    
+    # PayMongo fields
+    paymongo_payment_intent_id = models.CharField(max_length=255, blank=True, null=True)
+    paymongo_payment_method_id = models.CharField(max_length=255, blank=True, null=True)
+    paymongo_client_key = models.CharField(max_length=255, blank=True, null=True)
+    paymongo_status = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Temporary order flag for GCash payments
+    is_temporary = models.BooleanField(default=False, help_text="True if this is a temporary order pending payment confirmation")
     
     def __str__(self):
         return f"Order {self.id} by {self.user.username}"
@@ -204,9 +214,43 @@ class Sale(models.Model):
     )
     total_paid = models.DecimalField(max_digits=12, decimal_places=2)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='Paid')
     payment_reference = models.CharField(max_length=255, blank=True, null=True)
     payment_date = models.DateTimeField(auto_now_add=True)
+    handled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, help_text="Admin who processed the payment")
     notes = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return f"Sale #{self.id} — Order #{self.order.id} — {self.payment_status} — {self.amount}"
+        return f"Sale #{self.id} — Order #{self.order.id} — {self.payment_status} — ₱{self.total_paid}"
+
+    class Meta:
+        ordering = ['-payment_date']
+        verbose_name = "Sale"
+        verbose_name_plural = "Sales"
+
+class CheckoutSession(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("paid", "Paid"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    cart_snapshot = models.JSONField(help_text="Store items: [{product_id, name, qty, price}, ...]")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=8, default="PHP")
+    payment_method = models.CharField(max_length=32, help_text="gcash, cod, etc.")
+    paymongo_session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(null=True, blank=True, help_text="Optional extra data from PayMongo")
+    address = models.TextField(blank=True, help_text="Shipping address for this checkout session")
+
+    def __str__(self):
+        return f"CheckoutSession {self.id} ({self.status})"
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Checkout Session"
+        verbose_name_plural = "Checkout Sessions"

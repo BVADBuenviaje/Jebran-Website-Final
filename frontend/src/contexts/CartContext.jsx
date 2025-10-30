@@ -162,6 +162,25 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  const clearCartAfterPayment = async () => {
+    const token = localStorage.getItem('access');
+    if (!token) { 
+      setCartItems([]); 
+      setSelectedItems(new Set());
+      return; 
+    }
+    try {
+      await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/cart/clear/`, { method: 'POST' });
+      setCartItems([]);
+      setSelectedItems(new Set());
+    } catch (error) {
+      console.error('Error clearing cart after payment:', error);
+      // Still clear locally even if API call fails
+      setCartItems([]);
+      setSelectedItems(new Set());
+    }
+  };
+
   const clearCart = async () => {
     const token = localStorage.getItem('access');
     if (!token) { setCartItems([]); return; }
@@ -232,17 +251,22 @@ export const CartProvider = ({ children }) => {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          // If response is not JSON (e.g., HTML error page), get text
+          const errorText = await response.text();
+          console.error("CHECKOUT ERROR (Non-JSON):", errorText);
+          throw new Error(`Server error (${response.status}): ${errorText.substring(0, 200)}...`);
+        }
         console.error("CHECKOUT ERROR BODY:", errorData); 
         throw new Error(JSON.stringify(errorData)); 
       }
 
       
       const orderData = await response.json();
-      // Remove selected items from cart after successful checkout
-      const remainingItems = cartItems.filter(item => !selectedItems.has(item.id));
-      setCartItems(remainingItems);
-      setSelectedItems(new Set());
+      // Don't clear cart here - wait for payment confirmation
       return orderData;
     } catch (error) {
       console.error('Checkout error:', error);
@@ -276,6 +300,7 @@ export const CartProvider = ({ children }) => {
     removeFromCart,
     updateQuantity,
     clearCart,
+    clearCartAfterPayment,
     checkout,
     toggleItemSelection,
     selectAllItems,

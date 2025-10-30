@@ -16,6 +16,10 @@ import { CartProvider } from "./contexts/CartContext";
 import AdminOrders from "./pages/AdminOrders";
 import ResupplyOrders from "./pages/ResupplyOrders"; // Add this import
 import Orders from "./pages/Orders"; // Add this import
+import SalesManagement from "./pages/SalesManagement"; // Add this import
+import PaymentPage from "./pages/PaymentPage"; // Add this import
+import PaymentSuccess from "./pages/PaymentSuccess"; // Add this import
+import PaymentCancel from "./pages/PaymentCancel"; // Add this import
 import { fetchWithAuth } from "./utils/auth";
 
 function AppContent() {
@@ -162,6 +166,18 @@ function AppContent() {
     return <Orders />;
   };
 
+  const ProtectedSalesManagement = () => {
+    if (!token) return <Navigate to="/login" />;
+    if (loadingRole) return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f08b51] mb-4"></div>
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    );
+    if (role !== "admin") return <Navigate to="/" />;
+    return <SalesManagement />;
+  };
+
   // Hide navbar on login and signup pages
   const hideNavbar = location.pathname === "/login" || location.pathname === "/signup";
 
@@ -180,8 +196,12 @@ function AppContent() {
         <Route path="/admin-cart" element={<ProtectedAdminCart />} />
         <Route path="/resupply-orders" element={<ProtectedResupplyOrders />} /> {/* Add this line */}
         <Route path="/admin-orders" element={<ProtectedAdminOrders />} />
+        <Route path="/sales-management" element={<ProtectedSalesManagement />} />
         <Route path="/orders" element={<ProtectedOrders />} />
         <Route path="/orders/:id" element={<ProtectedOrders />} />
+        <Route path="/orders/:id/payment" element={<PaymentPage />} />
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/payment-cancel" element={<PaymentCancel />} />
         <Route path="/users/:id" element={<UserProfile />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="*" element={<div>404 Not Found</div>} />

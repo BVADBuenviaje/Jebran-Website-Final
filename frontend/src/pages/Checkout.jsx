@@ -3,9 +3,10 @@ import { useCart } from "../contexts/CartContext";
 import { fetchWithAuth } from "../utils/auth";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ShoppingBag, Wallet, MapPin } from "lucide-react";
+import { GCashPaymentButton } from "../utils/paymongo.jsx";
 
 const Checkout = () => {
-  const { cartItems, clearCart, getSelectedItems, getSelectedTotal, checkout } = useCart();
+  const { cartItems, clearCart, clearCartAfterPayment, getSelectedItems, getSelectedTotal, checkout } = useCart();
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -68,9 +69,58 @@ const Checkout = () => {
 
     setIsProcessing(true);
     try {
-      const orderData = await checkout(paymentMethod, shippingAddress);
-      // Navigate to the new order page
-      navigate(`/orders/${orderData.id}`);
+      // Prepare items for checkout session
+      const items = selectedItems.map(item => ({
+        product_id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price
+      }));
+
+      const payload = {
+        items: items,
+        payment_method: paymentMethod.toLowerCase(),
+        currency: "PHP",
+        success_url: `${window.location.origin}/payment-success`,
+        cancel_url: `${window.location.origin}/payment-cancel`,
+        address: shippingAddress
+      };
+
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/create-checkout-session/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || "Failed to create checkout session");
+      }
+
+      const data = await response.json();
+      
+      if (paymentMethod.toLowerCase() === "cod") {
+        // COD: redirect to order confirmation page
+        console.log('COD order created:', data);
+        
+        // Clear frontend cart state after successful COD order
+        try {
+          await clearCartAfterPayment();
+          console.log('✅ Frontend cart cleared after COD order');
+        } catch (error) {
+          console.error('Failed to clear frontend cart:', error);
+        }
+        
+        navigate(data.redirect_url);
+      } else {
+        // GCash: redirect to PayMongo checkout
+        console.log('GCash checkout session created:', data);
+        if (data.checkout_url) {
+          window.location.href = data.checkout_url;
+        } else {
+          throw new Error("No checkout_url returned");
+        }
+      }
     } catch (error) {
       alert(`Checkout failed: ${error.message}`);
     } finally {

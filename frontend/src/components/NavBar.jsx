@@ -72,8 +72,8 @@ export default function Navbar({ role, loadingRole }) {
     { label: "Home", path: "/" },
     { label: "Users", path: "/dashboard" },
     { label: "Products", path: "/products" },
-   
     { label: "Admin Orders", path: "/admin-orders" },
+    { label: "Sales Management", path: "/sales-management" },
     {
       label: "Inventory",
       type: "dropdown",
