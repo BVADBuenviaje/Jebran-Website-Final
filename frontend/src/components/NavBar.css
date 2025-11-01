@@ -53,18 +53,46 @@
   letter-spacing: 2px;
   margin-top: 4px;
   margin-bottom: 4px;
-  transition: opacity 0.3s ease;
+  transition: all 0.3s ease;
   opacity: 0.9;
   gap: 0rem;
+  position: relative;
+}
+
+.navbar-link::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #FFFBE8;
+  transition: width 0.3s ease;
 }
 
 .navbar-link:hover {
   opacity: 1;
 }
 
+.navbar-link:hover::after {
+  width: 100%;
+}
+
 .navbar-link.active {
   opacity: 1;
   /* font-weight: bold; */
+}
+
+.navbar-link.active::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #FFFBE8;
 }
 
 .navbar-cart {

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import "../styles/Home.css";
 import { ChefHat, Star, MapPin, Phone, Mail, Clock, Leaf, Zap, Heart } from "lucide-react";
 import { useNavigate } from "react-router-dom"; // <-- Make sure this is imported
 import { fetchWithAuth } from "../utils/auth";
 import ScrollingTitle from "../components/ScrollingTitle";
 import { useCart } from "../contexts/CartContext";
+import ToastNotification from "../components/ToastNotification";
 import AOS from "aos";
 import "aos/dist/aos.css";
 
@@ -14,8 +15,26 @@ const Home = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    AOS.init({ once: true, duration: 1000 });
+    AOS.init({ once: true, duration: 1000, offset: 120 });
     setIsVisible(true);
+    
+    // After animations complete, refresh AOS with once:true to ensure no re-triggers
+    // Remove data-aos attributes to prevent any future animations
+    const disableTimer = setTimeout(() => {
+      const elements = document.querySelectorAll('[data-aos]');
+      elements.forEach(el => {
+        // Mark elements as already animated by removing the data-aos attribute
+        el.removeAttribute('data-aos');
+      });
+      // Refresh AOS to clean up observers
+      if (AOS.refresh) {
+        AOS.refresh();
+      }
+    }, 2500);
+    
+    return () => {
+      clearTimeout(disableTimer);
+    };
   }, []);
 
   const colors = {
@@ -27,7 +46,7 @@ const Home = () => {
   };
 
   // Lightweight UI shims so JSX below compiles
-  const Button = (props) => <button {...props} />;
+  const Button = (props) => <button type="button" {...props} />;
   const Badge = (props) => <span {...props} />;
   const Card = (props) => <div {...props} />;
   const CardContent = (props) => <div {...props} />;
@@ -35,7 +54,9 @@ const Home = () => {
   // Add missing state and navigation
   const [role, setRole] = useState(null);
   const navigate = useNavigate(); // <-- ADD THIS LINE
-  const { addToCart } = useCart(); // Add cart functionality
+  
+  // Get addToCart function - memoized cart context should prevent unnecessary re-renders
+  const { addToCart } = useCart();
 
   // Using shared fetchWithAuth which auto-refreshes access tokens on 401
 
@@ -62,13 +83,24 @@ const Home = () => {
 
   const isLoggedIn = !!localStorage.getItem("access");
 
-  // Handle adding products to cart
-  const handleAddToCart = (product) => {
+  // Toast notification state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+
+  // Handle adding products to cart - memoized to prevent re-renders
+  const handleAddToCart = useCallback(async (product) => {
     console.log("Adding to cart:", product);
-    addToCart(product);
-    // Optional: Show a toast notification or feedback
-    alert(`${product.name} added to cart!`);
-  };
+    try {
+      await addToCart(product);
+      // Show floating toast notification instead of alert
+      setToastMessage(`${product.name} has been added to cart`);
+      setShowToast(true);
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      setToastMessage("Failed to add item to cart. Please try again.");
+      setShowToast(true);
+    }
+  }, [addToCart]);
 
   // Dynamic products shown on homepage (only Active ones from inventory)
   const [products, setProducts] = useState([]);
@@ -96,6 +128,9 @@ const Home = () => {
     loadProducts();
     return () => { isMounted = false; };
   }, []);
+
+  // Memoize products to prevent unnecessary re-renders
+  const memoizedProducts = useMemo(() => products, [products]);
 
   return (
     <div className="min-h-screen bg-white-custom">
@@ -246,7 +281,7 @@ const Home = () => {
       {/* Menu Section */}
       <section id="products" className="py-20 bg-cream-50" >
       <ScrollingTitle text="Specialties" repetitions={2000} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 " data-aos="fade-up">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" data-aos="fade-up" data-aos-once="true">
           <div className="text-center mb-16">
             {/* <Badge
               variant="secondary"
@@ -266,10 +301,10 @@ const Home = () => {
             {loadingProducts && (
               <div className="w-full text-center text-secondary-custom">Loading products...</div>
             )}
-            {!loadingProducts && products.length === 0 && (
+            {!loadingProducts && memoizedProducts.length === 0 && (
               <div className="w-full text-center text-secondary-custom">No active products available.</div>
             )}
-            {!loadingProducts && products.map((product, index) => {
+            {!loadingProducts && memoizedProducts.map((product, index) => {
               const imageSrc = product.image
                 ? (product.image.startsWith('http') ? product.image : `${import.meta.env.VITE_INVENTORY_URL}${product.image}`)
                 : '/delicious-noodle-bowl-with-colorful-ingredients.jpg';
@@ -278,7 +313,7 @@ const Home = () => {
                 ? `₱${Number(product.price).toFixed(2)}`
                 : '—';
               return (
-                <Card key={product.id} data-aos={fadeDir}
+                <Card key={product.id} 
                   className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border card-surface-white border-cream-custom menu-card flex flex-col md:flex-row overflow-hidden items-stretch"
                 >
                   <div className="relative overflow-hidden md:w-1/2">
@@ -695,6 +730,14 @@ const Home = () => {
           </div>
         </div>
       </footer>
+
+      {/* Toast Notification */}
+      <ToastNotification
+        message={toastMessage}
+        isVisible={showToast}
+        onClose={() => setShowToast(false)}
+        duration={3000}
+      />
     </div>
   )
 }

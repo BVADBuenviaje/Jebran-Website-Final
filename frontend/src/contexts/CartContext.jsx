@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchWithAuth } from '../utils/auth';
 const BACKEND_ORIGIN = new URL(import.meta.env.VITE_INVENTORY_URL).origin;
 
@@ -86,14 +86,14 @@ export const CartProvider = ({ children }) => {
     return () => { active = false; };
   }, [token]); // <-- use token state as dependency
 
-  const addToCart = async (product) => {
+  const addToCart = useCallback(async (product) => {
     const token = localStorage.getItem('access');
     if (!token) return; // require login
     await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/cart/add/`, {
       method: 'POST',
       body: JSON.stringify({ product_id: product.id, quantity: 1 })
     });
-    // Reload from backend
+    // Reload from backend - update state directly to avoid unnecessary re-renders
     const res = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/cart/`);
     if (res.ok) {
       const data = await res.json();
@@ -110,9 +110,9 @@ export const CartProvider = ({ children }) => {
       }).filter(it => it.id != null) : [];
       setCartItems(items);
     }
-  };
+  }, []);
 
-  const removeFromCart = async (productId) => {
+  const removeFromCart = useCallback(async (productId) => {
     const token = localStorage.getItem('access');
     if (!token) return;
     await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/cart/remove/`, {
@@ -135,9 +135,9 @@ export const CartProvider = ({ children }) => {
       }).filter(it => it.id != null) : [];
       setCartItems(items);
     }
-  };
+  }, []);
 
-  const updateQuantity = async (productId, quantity) => {
+  const updateQuantity = useCallback(async (productId, quantity) => {
     const token = localStorage.getItem('access');
     if (!token) return;
     await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/cart/update/`, {
@@ -160,9 +160,9 @@ export const CartProvider = ({ children }) => {
       }).filter(it => it.id != null) : [];
       setCartItems(items);
     }
-  };
+  }, []);
 
-  const clearCartAfterPayment = async () => {
+  const clearCartAfterPayment = useCallback(async () => {
     const token = localStorage.getItem('access');
     if (!token) { 
       setCartItems([]); 
@@ -179,16 +179,16 @@ export const CartProvider = ({ children }) => {
       setCartItems([]);
       setSelectedItems(new Set());
     }
-  };
+  }, []);
 
-  const clearCart = async () => {
+  const clearCart = useCallback(async () => {
     const token = localStorage.getItem('access');
     if (!token) { setCartItems([]); return; }
     await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/cart/clear/`, { method: 'POST' });
     setCartItems([]);
-  };
+  }, []);
 
-  const toggleItemSelection = (productId) => {
+  const toggleItemSelection = useCallback((productId) => {
     setSelectedItems(prev => {
       const newSet = new Set(prev);
       if (newSet.has(productId)) {
@@ -198,34 +198,34 @@ export const CartProvider = ({ children }) => {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const selectAllItems = () => {
+  const selectAllItems = useCallback(() => {
     const allIds = cartItems.map(item => item.id);
     setSelectedItems(new Set(allIds));
-  };
+  }, [cartItems]);
 
-  const deselectAllItems = () => {
+  const deselectAllItems = useCallback(() => {
     setSelectedItems(new Set());
-  };
+  }, []);
 
-  const isItemSelected = (productId) => {
+  const isItemSelected = useCallback((productId) => {
     return selectedItems.has(productId);
-  };
+  }, [selectedItems]);
 
-  const getSelectedItems = () => {
+  const getSelectedItems = useCallback(() => {
     return cartItems.filter(item => selectedItems.has(item.id));
-  };
+  }, [cartItems, selectedItems]);
 
-  const getSelectedTotal = () => {
+  const getSelectedTotal = useCallback(() => {
     return getSelectedItems().reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
+  }, [getSelectedItems]);
 
-  const getSelectedItemCount = () => {
+  const getSelectedItemCount = useCallback(() => {
     return getSelectedItems().reduce((total, item) => total + item.quantity, 0);
-  };
+  }, [getSelectedItems]);
 
-  const checkout = async (paymentMethod, address) => {
+  const checkout = useCallback(async (paymentMethod, address) => {
     const token = localStorage.getItem('access');
     if (!token) throw new Error('Authentication required');
     
@@ -254,7 +254,7 @@ export const CartProvider = ({ children }) => {
         let errorData;
         try {
           errorData = await response.json();
-        } catch (parseError) {
+        } catch {
           // If response is not JSON (e.g., HTML error page), get text
           const errorText = await response.text();
           console.error("CHECKOUT ERROR (Non-JSON):", errorText);
@@ -272,28 +272,30 @@ export const CartProvider = ({ children }) => {
       console.error('Checkout error:', error);
       throw error;
     }
-  };
+  }, [getSelectedItems]);
 
   const clearExampleItems = undefined;
   const loadSampleItems = undefined;
 
-  const getCartTotal = () => {
+  const getCartTotal = useCallback(() => {
     return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
+  }, [cartItems]);
 
-  const getCartItemCount = () => {
+  const getCartItemCount = useCallback(() => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
-  };
+  }, [cartItems]);
 
-  const isInCart = (productId) => {
+  const isInCart = useCallback((productId) => {
     return cartItems.some(item => item.id === productId);
-  };
+  }, [cartItems]);
 
-  const getCartItem = (productId) => {
+  const getCartItem = useCallback((productId) => {
     return cartItems.find(item => item.id === productId);
-  };
+  }, [cartItems]);
 
-  const value = {
+  // Memoize the context value to prevent unnecessary re-renders
+  // Only recreate when cartItems or selectedItems actually change
+  const value = useMemo(() => ({
     cartItems,
     selectedItems,
     addToCart,
@@ -316,7 +318,7 @@ export const CartProvider = ({ children }) => {
     getCartItemCount,
     isInCart,
     getCartItem
-  };
+  }), [cartItems, selectedItems, addToCart, removeFromCart, updateQuantity, clearCart, clearCartAfterPayment, checkout, toggleItemSelection, selectAllItems, deselectAllItems, isItemSelected, getSelectedItems, getSelectedTotal, getSelectedItemCount, setToken, clearExampleItems, loadSampleItems, getCartTotal, getCartItemCount, isInCart, getCartItem]);
 
   return (
     <CartContext.Provider value={value}>

@@ -11,9 +11,12 @@ const Ingredients = () => {
   const [role, setRole] = useState(null)
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [activeCategory, setActiveCategory] = useState("All")
+  const [expiryFilter, setExpiryFilter] = useState("all") // "all", "expired", "expiring", "custom", "range"
+  const [customExpiryDate, setCustomExpiryDate] = useState("")
+  const [expiryDateRange, setExpiryDateRange] = useState({ start: "", end: "" })
+  const [statusFilter, setStatusFilter] = useState("all") // "all", "active", "inactive"
   const navigate = useNavigate()
   const [updating, setUpdating] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
@@ -75,7 +78,6 @@ const Ingredients = () => {
           setLoading(true)
           const token = localStorage.getItem("access")
           if (!token) {
-            setError("Please log in to view ingredients")
             return
           }
           const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/`)
@@ -84,10 +86,8 @@ const Ingredients = () => {
           }
           const data = await response.json()
           setIngredients(data)
-          setError("")
         } catch (err) {
           console.error("Error fetching ingredients:", err)
-          setError("Failed to load ingredients. Please try again.")
         } finally {
           setLoading(false)
         }
@@ -296,7 +296,50 @@ const Ingredients = () => {
   const filteredIngredients = displayIngredients.filter((ingredient) => {
     const matchesSearch = ingredient.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = activeCategory === "All" || ingredient.category === activeCategory
-    return matchesSearch && matchesCategory
+    
+    // Expiry date filtering
+    let matchesExpiry = true
+    if (expiryFilter === "expired") {
+      if (!ingredient.expiry_date) matchesExpiry = false
+      else matchesExpiry = new Date(ingredient.expiry_date) < new Date()
+    } else if (expiryFilter === "expiring") {
+      if (!ingredient.expiry_date) matchesExpiry = false
+      else {
+        const expiryDate = new Date(ingredient.expiry_date)
+        const today = new Date()
+        const diffTime = expiryDate - today
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        matchesExpiry = diffDays <= 7 && diffDays >= 0
+      }
+    } else if (expiryFilter === "custom" && customExpiryDate) {
+      if (!ingredient.expiry_date) matchesExpiry = false
+      else {
+        const expiryDate = new Date(ingredient.expiry_date)
+        const filterDate = new Date(customExpiryDate)
+        matchesExpiry = expiryDate <= filterDate
+      }
+    } else if (expiryFilter === "range") {
+      if (!ingredient.expiry_date) matchesExpiry = false
+      else if (expiryDateRange.start && expiryDateRange.end) {
+        const expiryDate = new Date(ingredient.expiry_date)
+        const startDate = new Date(expiryDateRange.start)
+        const endDate = new Date(expiryDateRange.end)
+        // Set time to start/end of day for proper range comparison
+        startDate.setHours(0, 0, 0, 0)
+        endDate.setHours(23, 59, 59, 999)
+        matchesExpiry = expiryDate >= startDate && expiryDate <= endDate
+      }
+    }
+    
+    // Status filtering
+    let matchesStatus = true
+    if (statusFilter === "active") {
+      matchesStatus = ingredient.is_active === true
+    } else if (statusFilter === "inactive") {
+      matchesStatus = ingredient.is_active === false
+    }
+    
+    return matchesSearch && matchesCategory && matchesExpiry && matchesStatus
   })
 
   const categories = ["All", ...Array.from(new Set(displayIngredients.map(i => i.category).filter(Boolean)))]
@@ -428,24 +471,147 @@ const Ingredients = () => {
           </div>
 
           <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex flex-wrap gap-2">
-              {categories.map((category) => (
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">Category:</label>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setActiveCategory(category)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      activeCategory === category
+                        ? "bg-[#f08b51] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Status Filter */}
+              <div className="flex items-center gap-2 border-l border-gray-300 pl-4">
+                <label className="text-sm font-medium text-gray-700">Status:</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setStatusFilter("all")}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      statusFilter === "all"
+                        ? "bg-[#f08b51] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter("active")}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      statusFilter === "active"
+                        ? "bg-[#f08b51] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => setStatusFilter("inactive")}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      statusFilter === "inactive"
+                        ? "bg-[#f08b51] text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Inactive
+                  </button>
+                </div>
+              </div>
+               {/* Expiry Date Filter */}
+            <div className="flex flex-wrap items-center gap-4 border-l border-gray-300 pl-4">
+              <div className="flex items-center gap-2">
+  
+                <label className="text-sm font-medium text-gray-700">Expiration:</label>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <button
-                  key={category}
-                  onClick={() => setActiveCategory(category)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeCategory === category
+                  onClick={() => {
+                    setExpiryFilter("all")
+                    setCustomExpiryDate("")
+                    setExpiryDateRange({ start: "", end: "" })
+                  }}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    expiryFilter === "all"
                       ? "bg-[#f08b51] text-white"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  {category}
+                  All
                 </button>
-              ))}
+                <button
+                  onClick={() => {
+                    setExpiryFilter("expired")
+                    setCustomExpiryDate("")
+                    setExpiryDateRange({ start: "", end: "" })
+                  }}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    expiryFilter === "expired"
+                      ? "bg-[#f08b51] text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Expired
+                </button>
+                {/* <button
+                  onClick={() => {
+                    setExpiryFilter("expiring")
+                    setCustomExpiryDate("")
+                    setExpiryDateRange({ start: "", end: "" })
+                  }}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    expiryFilter === "expiring"
+                      ? "bg-[#f08b51] text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Expiring Soon (≤7 days)
+                </button> */}
+                <button
+                  onClick={() => {
+                    setExpiryFilter("range")
+                    setCustomExpiryDate("")
+                  }}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    expiryFilter === "range"
+                      ? "bg-[#f08b51] text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  Date Range
+                </button>
+              </div>
+              {expiryFilter === "range" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={expiryDateRange.start}
+                    onChange={(e) => setExpiryDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
+                    placeholder="Start date"
+                  />
+                  <span className="text-gray-500">to</span>
+                  <input
+                    type="date"
+                    value={expiryDateRange.end}
+                    onChange={(e) => setExpiryDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
+                    placeholder="End date"
+                  />
+                </div>
+              )}
+            </div>
             </div>
           </div>
 
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 space-y-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1 max-w-md">
                 <div className="relative">
@@ -472,6 +638,8 @@ const Ingredients = () => {
                 </div>
               </div>
             </div>
+            
+           
           </div>
 
           <div className="overflow-x-auto">

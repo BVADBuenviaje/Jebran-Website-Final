@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useMemo, memo } from "react";
 import "../styles/ScrollingTitle.css";
 
-const ScrollingTitle = ({ text, repetitions = 2000, speed = 10000 }) => {
-  // Create array of repeated text for seamless loop
-  const repeatedText = Array(repetitions).fill(text);
+const ScrollingTitle = memo(({ text, repetitions = 2000, speed = 10000 }) => {
+  // Create array of repeated text for seamless loop - memoize to prevent recreation on every render
+  const repeatedText = useMemo(() => Array(repetitions).fill(text), [text, repetitions]);
 
   return (
     
@@ -32,6 +32,8 @@ const ScrollingTitle = ({ text, repetitions = 2000, speed = 10000 }) => {
       <hr className="hr2"/>
     </div>
   );
-};
+});
+
+ScrollingTitle.displayName = 'ScrollingTitle';
 
 export default ScrollingTitle;
