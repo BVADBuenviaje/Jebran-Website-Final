@@ -28,15 +28,9 @@ const Checkout = () => {
   const total = subtotal + tax + shipping;
 
   useEffect(() => {
-    const token = localStorage.getItem("access");
     const userId = localStorage.getItem("user.id");
-    if (token && userId) {
-      fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${userId}/`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
+    if (userId) {
+      fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${userId}/`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           setUser(data);

@@ -1,4 +1,3 @@
-// filepath: c:\Jebran Website\frontend\src\components\SupplierList.jsx
 import React from "react";
 import SupplierRow from "./SupplierRow";
 
@@ -15,7 +14,7 @@ const SupplierList = ({ suppliers, onEdit, onBlock, onSelect }) => (
           supplier={supplier}
           onEdit={onEdit}
           onBlock={onBlock}
-          onSelect={onSelect} // <-- Pass down
+          onSelect={onSelect}
         />
       ))
     )}

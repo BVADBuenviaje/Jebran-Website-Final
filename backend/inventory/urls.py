@@ -1,7 +1,19 @@
 from rest_framework.routers import DefaultRouter
-from django.urls import path
-from .views import IngredientViewSet, SupplierViewSet, ProductViewSet, IngredientSupplierViewSet, CartViewSet, ResupplyOrderViewSet, OrderViewSet, SalesViewSet, CreateCheckoutSessionAPIView, PaymongoWebhookAPIView
-from .webhooks import PayMongoWebhookView
+from django.urls import path, include
+from .views import (
+    IngredientViewSet,
+    SupplierViewSet,
+    ProductViewSet,
+    IngredientSupplierViewSet,
+    CartViewSet,
+    ResupplyOrderViewSet,
+    ResupplyOrderItemViewSet,
+    IngredientBatchViewSet,
+    OrderViewSet,
+    SalesViewSet,
+    CreateCheckoutSessionAPIView,
+    PaymongoWebhookAPIView,
+)
 
 router = DefaultRouter()
 router.register(r'ingredients', IngredientViewSet)
@@ -9,6 +21,8 @@ router.register(r'suppliers', SupplierViewSet)
 router.register(r'products', ProductViewSet)
 router.register(r'ingredient-suppliers', IngredientSupplierViewSet)
 router.register(r'resupply-orders', ResupplyOrderViewSet)
+router.register(r'order-items', ResupplyOrderItemViewSet, basename='order-items')
+router.register(r'batches', IngredientBatchViewSet, basename='batches')
 router.register(r'cart', CartViewSet, basename='cart')
 router.register(r'orders', OrderViewSet, basename='orders')
 router.register(r'sales', SalesViewSet, basename='sales')

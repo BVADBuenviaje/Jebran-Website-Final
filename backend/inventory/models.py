@@ -11,10 +11,8 @@ class Ingredient(models.Model):
     restock_level = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, help_text="Minimum quantity before restocking")
     is_active = models.BooleanField(default=True)
 
-    # keep the existing fields for Phase A (migration). These will be removed after data migration.
+    # category kept
     category = models.CharField(max_length=50, blank=True, help_text="e.g. Produce, Meat, Dry Goods")
-    expiry_date = models.DateField(null=True, blank=True)
-    current_stock = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, help_text="Current available quantity")
 
     def __str__(self):
         return self.name
@@ -26,19 +24,11 @@ class Ingredient(models.Model):
 
     @property
     def total_stock(self):
-        """
-        Sum of current_quantity across related InventoryBatch records.
-        Returns Decimal('0') when no batches exist.
-        """
         agg = self.batches.aggregate(total=Sum('current_quantity'))
         return Decimal(agg['total'] or 0)
 
     @property
     def next_expiry_date(self):
-        """
-        Next expiry date among batches that still have stock (FEFO candidate).
-        Returns None if no batches with current_quantity > 0 exist.
-        """
         agg = self.batches.filter(current_quantity__gt=0).aggregate(next_expiry=Min('expiry_date'))
         return agg['next_expiry']
 
@@ -71,7 +61,6 @@ class ProductIngredient(models.Model):
         verbose_name_plural = "Product Ingredients"
 
 
-# Define M2M using through model after classes exist
 Product.add_to_class('ingredients', models.ManyToManyField(Ingredient, through=ProductIngredient, related_name="products", blank=True))
 
 
@@ -133,31 +122,20 @@ class ResupplyOrderItem(models.Model):
     order = models.ForeignKey(ResupplyOrder, related_name="items", on_delete=models.CASCADE)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
 
-    # Phase A: new field to receive ordered quantity (nullable for migration)
-    quantity_ordered = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, help_text="Quantity ordered (new)")
-
-    # keep the legacy 'quantity' for migration; remove in Phase C
-    quantity = models.DecimalField(max_digits=12, decimal_places=3, help_text="(legacy) Quantity ordered — kept for migration")
+    # source of truth after migration
+    quantity_ordered = models.DecimalField(max_digits=12, decimal_places=3)
 
     def __str__(self):
-        ordered = self.quantity_ordered if self.quantity_ordered is not None else self.quantity
-        return f"{ordered} {self.ingredient.unit_of_measurement} of {self.ingredient.name}"
+        return f"{self.quantity_ordered} {self.ingredient.unit_of_measurement} of {self.ingredient.name}"
 
     @property
     def quantity_received(self):
-        """
-        Sum of quantity_received from related InventoryBatch records.
-        """
         agg = self.batches.aggregate(received=Sum('quantity_received'))
         return Decimal(agg['received'] or 0)
 
     @property
     def is_fully_received(self):
-        """
-        True when total received >= ordered (use quantity_ordered if present, else legacy quantity).
-        """
-        ordered = self.quantity_ordered if self.quantity_ordered is not None else self.quantity
-        return self.quantity_received >= (ordered or Decimal('0'))
+        return self.quantity_received >= (self.quantity_ordered or Decimal('0'))
 
 
 class IngredientBatch(models.Model):
@@ -173,6 +151,7 @@ class IngredientBatch(models.Model):
         verbose_name = "Ingredient Batch"
         verbose_name_plural = "Ingredient Batches"
         ordering = ["expiry_date", "received_date"]
+        indexes = [models.Index(fields=["ingredient", "expiry_date"])]
 
     def __str__(self):
         uom = self.ingredient.unit_of_measurement or ""
@@ -180,7 +159,7 @@ class IngredientBatch(models.Model):
 
     def reduce(self, amount):
         amt = Decimal(amount)
-        if amt < 0:
+        if amt <= 0:
             raise ValueError("amount must be positive")
         if Decimal(self.current_quantity) < amt:
             raise ValueError("not enough quantity in batch")
@@ -192,28 +171,20 @@ class IngredientBatch(models.Model):
             raise ValidationError("order_item.ingredient must match IngredientBatch.ingredient")
 
     def save(self, *args, **kwargs):
-        """
-        Ensure current_quantity initialized and valid, enforce invariants, run validation,
-        then save. Callers that change quantities in bulk should wrap in a transaction.
-        """
-        # initialize current_quantity to quantity_received if not provided
+        # initialize current_quantity if not provided
         if self.current_quantity is None and self.quantity_received is not None:
             self.current_quantity = self.quantity_received
 
-        # normalize values to Decimal when present
         curr = Decimal(self.current_quantity) if self.current_quantity is not None else None
         recv = Decimal(self.quantity_received) if self.quantity_received is not None else None
 
-        # basic validations
         if curr is not None and curr < 0:
             raise ValueError("current_quantity cannot be negative")
         if curr is not None and recv is not None and curr > recv:
             raise ValueError("current_quantity cannot exceed quantity_received")
 
-        # run model validation (this calls clean())
+        # validate cross-field invariants
         self.full_clean()
-
-        # finally persist
         super().save(*args, **kwargs)
 
 
@@ -283,7 +254,6 @@ class Order(models.Model):
     paymongo_client_key = models.CharField(max_length=255, blank=True, null=True)
     paymongo_status = models.CharField(max_length=50, blank=True, null=True)
 
-    # Temporary order flag for GCash payments
     is_temporary = models.BooleanField(default=False, help_text="True if this is a temporary order pending payment confirmation")
 
     def __str__(self):

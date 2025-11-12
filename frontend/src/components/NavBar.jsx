@@ -89,6 +89,7 @@ export default function Navbar({ role, loadingRole }) {
   const userLinks = [
     { label: "Home", path: "/" },
     { label: "Products", path: "/#products" },
+    { label: "Orders", path: "/orders" },           // <-- Add this line
     { label: "About", path: "/#about" },
     { label: "Contact", path: "/#contact" },
   ];

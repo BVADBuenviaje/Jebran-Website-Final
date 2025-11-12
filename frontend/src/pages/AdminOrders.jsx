@@ -29,7 +29,6 @@ export default function AdminOrders() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orders, setOrders] = useState(FALLBACK_ORDERS);
   const [, setLoading] = useState(true);
-  // removed inline status editor
 
   useEffect(() => {
     let active = true;
@@ -40,7 +39,6 @@ export default function AdminOrders() {
         if (!active) return;
         if (res.ok) {
           const data = await res.json();
-          // Transform API orders into UI-friendly shape
           const uiOrders = (Array.isArray(data) ? data : []).map((o) => ({
             id: o.id,
             customer: { name: o.user || "Reseller", email: "" },
@@ -91,7 +89,6 @@ export default function AdminOrders() {
     const ok = window.confirm(`Change status of ${order.id} from ${order.status} to ${nextStatus}?`);
     if (!ok) return;
     try {
-      // Prefer dedicated status endpoint (POST), fallback to PATCH for older backends
       let res = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/orders/${order.id}/status/`, {
         method: 'POST',
         body: JSON.stringify({ status: nextStatus })
@@ -107,7 +104,6 @@ export default function AdminOrders() {
         alert(data.detail || `Failed to update status (code ${res.status})`);
         return;
       }
-      // refresh list
       const refreshed = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/orders/`);
       if (refreshed.ok) {
         const data = await refreshed.json();
@@ -128,7 +124,6 @@ export default function AdminOrders() {
           address: o.address || "",
         }));
         setOrders(uiOrders);
-        // If modal open, update it too
         if (selectedOrder) {
           const updated = uiOrders.find(u => u.id === selectedOrder.id);
           if (updated) setSelectedOrder(updated);
@@ -138,6 +133,53 @@ export default function AdminOrders() {
       alert('Failed to update status');
     }
   };
+
+  const updatePaymentStatusWithConfirm = async (order, nextStatus) => {
+    const ok = window.confirm(`Change payment status of ${order.id} from ${order.payment_status} to ${nextStatus}?`);
+    if (!ok) return;
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/orders/${order.id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ payment_status: nextStatus })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || `Failed to update payment status (code ${res.status})`);
+        return;
+      }
+      const refreshed = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/orders/`);
+      if (refreshed.ok) {
+        const data = await refreshed.json();
+        const uiOrders = (Array.isArray(data) ? data : []).map((o) => ({
+          id: o.id,
+          customer: { name: o.user || "Reseller", email: "" },
+          date: o.created_at ? new Date(o.created_at).toISOString().slice(0, 10) : "",
+          status: o.status || "Pending",
+          payment_status: o.payment_status || "Unpaid",
+          payment_method: o.payment_method || "COD",
+          payment_reference: o.payment_reference || "",
+          items: (o.items || []).map((it) => ({
+            name: it.product?.name || "",
+            quantity: it.quantity,
+            price: Number(it.price_at_purchase) || 0,
+          })),
+          total: Number(o.total_price) || 0,
+          address: o.address || "",
+        }));
+        setOrders(uiOrders);
+        if (selectedOrder) {
+          const updated = uiOrders.find(u => u.id === selectedOrder.id);
+          if (updated) setSelectedOrder(updated);
+        }
+      }
+    } catch {
+      alert('Failed to update payment status');
+    }
+  };
+
+  // Helper to determine if we can "unmark" delivered or paid
+  const canUnmarkDelivered = (order) => order.status === "Delivered";
+  const canUnmarkPaid = (order) => order.payment_status === "Paid";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -268,9 +310,6 @@ export default function AdminOrders() {
                           >
                             View
                           </button>
-                          {/* <button className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-gray-100 text-gray-700" title="More">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button> */}
                         </div>
                       </td>
                     </tr>
@@ -348,15 +387,21 @@ export default function AdminOrders() {
               <div className="flex items-center gap-2">
                 {/* Payment Status Buttons */}
                 {selectedOrder.payment_status !== 'Paid' && (
-                  <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Paid')} className="px-3 py-2 rounded-md border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100">Mark Paid</button>
+                  <button onClick={() => updatePaymentStatusWithConfirm(selectedOrder, 'Paid')} className="px-3 py-2 rounded-md border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100">Mark Paid</button>
                 )}
-                {selectedOrder.payment_status !== 'Unpaid' && (
-                  <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Unpaid')} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Mark Unpaid</button>
+                {selectedOrder.payment_status === 'Paid' && (
+                  <button onClick={() => updatePaymentStatusWithConfirm(selectedOrder, 'Unpaid')} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Unmark Paid</button>
                 )}
-                
+                {selectedOrder.payment_status !== 'Unpaid' && selectedOrder.payment_status !== 'Paid' && (
+                  <button onClick={() => updatePaymentStatusWithConfirm(selectedOrder, 'Unpaid')} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Mark Unpaid</button>
+                )}
+
                 {/* Order Status Buttons */}
                 {selectedOrder.status !== 'Delivered' && (
                   <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Delivered')} className="px-3 py-2 rounded-md border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">Mark Delivered</button>
+                )}
+                {selectedOrder.status === 'Delivered' && (
+                  <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Pending')} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Unmark Delivered</button>
                 )}
                 {selectedOrder.status !== 'Cancelled' && (
                   <button onClick={() => updateStatusWithConfirm(selectedOrder, 'Cancelled')} className="px-3 py-2 rounded-md border border-red-300 text-white bg-red-600 hover:bg-red-700">Cancel Order</button>
@@ -367,11 +412,6 @@ export default function AdminOrders() {
           </div>
         </div>
       )}
-
-      {/* Status Editor Modal (removed as requested) */}
     </div>
   );
 }
-
-
-

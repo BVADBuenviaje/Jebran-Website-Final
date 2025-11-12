@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Navigate, useNavigate } from "react-router-dom"
 import { fetchWithAuth } from "../utils/auth"
-
 
 const Products = () => {
   const [role, setRole] = useState(null)
@@ -12,9 +11,9 @@ const Products = () => {
   const [, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [activeCategory] = useState("All")
+  const [statusFilter, setStatusFilter] = useState("all")
   const navigate = useNavigate()
   const [updating, setUpdating] = useState(null)
-  const [deletingId, setDeletingId] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
@@ -32,6 +31,8 @@ const Products = () => {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [dropSuccess, setDropSuccess] = useState(false)
+  // Track removed inactive ingredients for each product
+  const [removedInactiveIngredients, setRemovedInactiveIngredients] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -47,13 +48,12 @@ const Products = () => {
       .then(res => {
         if (!isMounted) return;
         if (res.ok) return res.json();
-        // If not ok, don't set role to null yet (wait for refresh)
         return null;
       })
       .then(data => {
         if (!isMounted) return;
         if (data && data.role) setRole(data.role);
-        else setRole(null); // Only set to null if refresh failed
+        else setRole(null);
         setLoadingRole(false);
       })
       .catch(() => {
@@ -97,26 +97,93 @@ const Products = () => {
     const token = localStorage.getItem("access")
     if (!token) return
     fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setAllIngredients(Array.isArray(data) ? data : []))
+      .then(async (r) => {
+        if (!r.ok) return []
+        const data = await r.json()
+        if (Array.isArray(data)) {
+          return data.map(i => ({
+            ...i,
+            current_stock: i.current_stock ?? i.total_stock ?? null,
+          }))
+        }
+        return []
+      })
+      .then(data => setAllIngredients(data))
       .catch(() => setAllIngredients([]))
   }, [])
 
+  // Only show active ingredients in dropdown
+  const activeIngredients = allIngredients.filter(i => i.is_active);
+
+  // Remove inactive ingredients from ingredient list in modal, restore if re-enabled
+  useEffect(() => {
+    if (!showModal) return;
+    if (!editingProduct) return;
+
+    // Find inactive ingredients currently in the product's ingredient list
+    const inactiveNames = allIngredients.filter(i => !i.is_active).map(i => i.name);
+    const filteredIngredients = (formData.ingredients || []).filter(i => !inactiveNames.includes(i.name));
+    const removed = (formData.ingredients || []).filter(i => inactiveNames.includes(i.name));
+    if (removed.length > 0) {
+      setRemovedInactiveIngredients(prev => ({
+        ...prev,
+        [editingProduct.id]: removed
+      }));
+    }
+    if (filteredIngredients.length !== (formData.ingredients || []).length) {
+      setFormData(prev => ({
+        ...prev,
+        ingredients: filteredIngredients
+      }));
+    }
+    // eslint-disable-next-line
+  }, [allIngredients, showModal, editingProduct]);
+
+  useEffect(() => {
+    if (!showModal) return;
+    if (!editingProduct) return;
+    const removed = removedInactiveIngredients[editingProduct.id] || [];
+    if (!removed.length) return;
+    const nowActiveNames = activeIngredients.map(i => i.name);
+    const toRestore = removed.filter(i => nowActiveNames.includes(i.name));
+    if (toRestore.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        ingredients: [
+          ...prev.ingredients,
+          ...toRestore.filter(i => !prev.ingredients.some(ing => ing.name === i.name))
+        ]
+      }));
+      setRemovedInactiveIngredients(prev => ({
+        ...prev,
+        [editingProduct.id]: removed.filter(i => !nowActiveNames.includes(i.name))
+      }));
+    }
+    // eslint-disable-next-line
+  }, [allIngredients, showModal, editingProduct]);
+
+  const parseStock = (raw) => {
+    if (raw === null || raw === undefined || raw === "") return null
+    const n = Number(raw)
+    return Number.isNaN(n) ? null : n
+  }
+
   const checkIngredientSufficiency = (ingredientName, requiredQuantity, requiredUom) => {
-    const ingredient = allIngredients.find(ing => ing.name === ingredientName)
+    const ingredient = allIngredients.find(ing => (ing.name || "").trim().toLowerCase() === (ingredientName || "").trim().toLowerCase())
     if (!ingredient) return { sufficient: false, available: 0, uom: "", uomMismatch: false }
-    const available = Number(ingredient.current_stock) || 0
-    const required = Number(requiredQuantity) || 0
-    const uomMismatch = requiredUom && ingredient.unit_of_measurement &&
-      requiredUom.toLowerCase() !== ingredient.unit_of_measurement.toLowerCase()
+    const available = parseStock(ingredient.current_stock) ?? 0
+    const required = parseStock(requiredQuantity) ?? 0
+    const ingUom = ingredient.unit_of_measurement || ""
+    const uomMismatch = requiredUom && ingUom && (requiredUom || "").trim().toLowerCase() !== ingUom.trim().toLowerCase()
     return {
       sufficient: available >= required,
       available,
-      uom: ingredient.unit_of_measurement,
+      uom: ingUom,
       uomMismatch
     }
   }
 
+  // Toggle product status between Active/Inactive
   const toggleProductStatus = async (productId, currentStatus) => {
     try {
       setUpdating(productId)
@@ -134,24 +201,6 @@ const Products = () => {
       alert("Failed to update product status. Please try again.")
     } finally {
       setUpdating(null)
-    }
-  }
-
-  const deleteProduct = async (productId) => {
-    const confirmed = window.confirm("Are you sure you want to delete this product?")
-    if (!confirmed) return
-    try {
-      setDeletingId(productId)
-      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/products/${productId}/`, {
-        method: "DELETE",
-      })
-      if (!response.ok && response.status !== 204) throw new Error(`HTTP error! status: ${response.status}`)
-      setProducts(prev => prev.filter(p => p.id !== productId))
-    } catch (err) {
-      console.error("Error deleting product:", err)
-      alert("Failed to delete product. Please try again.")
-    } finally {
-      setDeletingId(null)
     }
   }
 
@@ -209,10 +258,17 @@ const Products = () => {
   }
 
   const handleIngredientFieldChange = (index, field, value) => {
-    const list = [...formData.ingredients]
-    list[index] = { ...(list[index] || { name: "", quantity: "", uom: "" }), [field]: value }
-    setFormData(prev => ({ ...prev, ingredients: list }))
-  }
+    if (field === "name") {
+      // Prevent duplicate ingredient names
+      if (formData.ingredients.some((ing, idx) => ing.name === value && idx !== index)) {
+        alert("This ingredient is already added.");
+        return;
+      }
+    }
+    const list = [...formData.ingredients];
+    list[index] = { ...(list[index] || { name: "", quantity: "", uom: "" }), [field]: value };
+    setFormData(prev => ({ ...prev, ingredients: list }));
+  };
 
   const addIngredientField = () => {
     setFormData(prev => ({ ...prev, ingredients: [...prev.ingredients, { name: "", quantity: "", uom: "" }] }))
@@ -223,22 +279,16 @@ const Products = () => {
   }
 
   const validateAndSetImage = (file) => {
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       alert('Please select a valid image file (JPG, PNG, GIF, or WebP)');
       return false;
     }
-    
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB');
       return false;
     }
-    
     setUploadedFile(file);
-    
-    // Create a local URL for preview
     const imageUrl = URL.createObjectURL(file);
     setFormData(prev => ({ ...prev, image: imageUrl }));
     return true;
@@ -264,24 +314,20 @@ const Products = () => {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
-    
     const files = Array.from(e.dataTransfer.files);
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    
     if (imageFiles.length === 0) {
       alert('Please drop only image files');
       return;
     }
-    
     if (imageFiles.length > 1) {
       alert('Please drop only one image file at a time');
       return;
     }
-    
     const success = validateAndSetImage(imageFiles[0]);
     if (success) {
       setDropSuccess(true);
-      setTimeout(() => setDropSuccess(false), 2000); // Clear success message after 2 seconds
+      setTimeout(() => setDropSuccess(false), 2000);
     }
   }
 
@@ -305,19 +351,13 @@ const Products = () => {
     }
     try {
       setSaving(true)
-      
-      // Create FormData for file upload
       const formDataToSend = new FormData()
       formDataToSend.append('name', formData.name.trim())
       formDataToSend.append('price', formData.price === "" ? "" : formData.price)
       formDataToSend.append('status', formData.status)
-      
-      // Add image file if uploaded
       if (uploadedFile) {
         formDataToSend.append('image', uploadedFile)
       }
-      
-      // Add ingredient items as JSON string
       const ingredientItems = formData.ingredients
         .map(i => ({
           name: (i.name || "").trim(),
@@ -326,16 +366,14 @@ const Products = () => {
         }))
         .filter(i => i.name)
       formDataToSend.append('ingredient_items', JSON.stringify(ingredientItems))
-      
       const isEdit = !!editingProduct
       const url = isEdit
         ? `${import.meta.env.VITE_INVENTORY_URL}/products/${editingProduct.id}/`
         : `${import.meta.env.VITE_INVENTORY_URL}/products/`
       const method = isEdit ? "PATCH" : "POST"
-      
       const res = await fetchWithAuth(url, {
         method,
-        body: formDataToSend, // Remove Content-Type header to let browser set it with boundary
+        body: formDataToSend,
       })
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
       const saved = await res.json()
@@ -357,11 +395,13 @@ const Products = () => {
   const filteredProducts = displayProducts.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = activeCategory === "All" || product.category === activeCategory
-    return matchesSearch && matchesCategory
+    let matchesStatus = true
+    if (statusFilter === "active") matchesStatus = product.status === "Active"
+    else if (statusFilter === "inactive") matchesStatus = product.status === "Inactive"
+    return matchesSearch && matchesCategory && matchesStatus
   })
 
   const totalProducts = displayProducts.length
-  // const lowStockAlerts = displayProducts.filter(p => (typeof p.stock === "number" ? p.stock < 10 : false) || p.status === "Low Stock").length
   const activeProducts = displayProducts.filter(p => p.status === "Active").length
 
   if (loading) {
@@ -430,26 +470,6 @@ const Products = () => {
               </div>
             </div>
 
-            {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">Low Stock Alerts</p>
-                  <p className="text-3xl font-bold text-[#f08b51] mb-1">{lowStockAlerts}</p>
-                  <p className="text-sm text-gray-500">Items need restocking</p>
-                </div>
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div> */}
-
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -480,8 +500,8 @@ const Products = () => {
 
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex-1 max-w-md">
-                <div className="relative">
+              <div className="flex-1 max-w-md flex gap-4 items-center">
+                <div className="relative flex-1">
                   <svg
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
                     fill="none"
@@ -503,6 +523,16 @@ const Products = () => {
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
                   />
                 </div>
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="border rounded px-2 py-1"
+                  style={{ minWidth: 120 }}
+                >
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
               </div>
             </div>
           </div>
@@ -523,9 +553,6 @@ const Products = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Description
                   </th>
-                  {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stock
-                  </th> */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
@@ -562,17 +589,21 @@ const Products = () => {
                       {product.description ? product.description : "—"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                     <button
-                       onClick={() => toggleProductStatus(product.id, product.status)}
-                       disabled={updating === product.id}
-                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full transition-colors ${
-                         product.status === "Active" ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-red-100 text-red-800 hover:bg-red-200"
-                       } ${updating === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                     >
-                       {updating === product.id ? "Updating..." : product.status}
-                     </button>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        product.status === "Active"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}>
+                        {product.status}
+                      </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{Array.isArray(product.ingredients) ? product.ingredients.length : 0}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {Array.isArray(product.ingredients)
+                        ? product.ingredients.filter(ing =>
+                            allIngredients.find(ai => ai.name === (ing.name || ing) && ai.is_active)
+                          ).length
+                        : 0}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -582,13 +613,19 @@ const Products = () => {
                           Edit
                         </button>
                         <button
-                          onClick={() => deleteProduct(product.id)}
-                          disabled={deletingId === product.id || updating === product.id}
+                          onClick={() => toggleProductStatus(product.id, product.status)}
+                          disabled={updating === product.id}
                           className={`px-3 py-1 rounded-lg text-xs transition-colors ${
-                            deletingId === product.id ? "bg-red-200 text-white cursor-not-allowed" : "bg-red-100 text-red-700 hover:bg-red-200"
+                            product.status === "Active"
+                              ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                              : "bg-green-100 text-green-700 hover:bg-green-200"
                           }`}
                         >
-                          {deletingId === product.id ? "Deleting..." : "Delete"}
+                          {updating === product.id
+                            ? "Updating..."
+                            : product.status === "Active"
+                              ? "Disable"
+                              : "Enable"}
                         </button>
                       </div>
                     </td>
@@ -613,10 +650,6 @@ const Products = () => {
                 <input name="name" value={formData.name} onChange={handleChange} required className="w-full border rounded-md px-3 py-2" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <input name="category" value={formData.category} onChange={handleChange} placeholder="e.g. Noodles" className="w-full border rounded-md px-3 py-2" />
-                </div> */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Price (₱)</label>
                   <input name="price" value={formData.price} onChange={handleChange} type="number" step="0.01" min="0" className="w-full border rounded-md px-3 py-2" />
@@ -632,18 +665,10 @@ const Products = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
                 <div className="space-y-2">
-                  {/* <input 
-                    name="image" 
-                    value={formData.image} 
-                    onChange={handleChange} 
-                    placeholder="Image URL (e.g. /images/product.jpg or https://example.com/image.jpg)" 
-                    className="w-full border rounded-md px-3 py-2" 
-                  /> */}
                   <div className="text-xs text-gray-500">
                     You can enter an image URL, upload a file, or drag & drop an image below
                   </div>
                   
-                  {/* Drag and Drop Area */}
                   <div className="relative">
                     <div
                       onDragOver={handleDragOver}
@@ -735,11 +760,6 @@ const Products = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
-                  <input name="stock" value={formData.stock} onChange={handleChange} type="number" min="0" className="w-full border rounded-md px-3 py-2" />
-                </div> */}
-
               </div>
 
               <div>
@@ -755,7 +775,7 @@ const Products = () => {
                           className="w-full border rounded-md px-3 py-2"
                         >
                           <option value="">Select ingredient</option>
-                          {allIngredients.map((ingredient) => (
+                          {activeIngredients.map((ingredient) => (
                             <option key={ingredient.name} value={ingredient.name}>{ingredient.name}</option>
                           ))}
                         </select>
@@ -768,12 +788,6 @@ const Products = () => {
                           className="w-full border rounded-md px-3 py-2"
                           placeholder="Quantity"
                         />
-                        {/* <input
-                          value={ing.uom}
-                          onChange={(e) => handleIngredientFieldChange(idx, 'uom', e.target.value)}
-                          className="w-full border rounded-md px-3 py-2"
-                          placeholder="UoM (e.g. g, ml, pcs)"
-                        /> */}
                         {ing.name && ing.quantity && (
                           <div className="md:col-span-3 flex flex-wrap gap-1 mt-1">
                             {!sufficiency.sufficient && (
