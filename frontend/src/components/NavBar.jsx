@@ -11,10 +11,11 @@ import AdminCartModal from "./AdminCartModal";
 export default function Navbar({ role, loadingRole }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showAdminCartModal, setShowAdminCartModal] = useState(false);
-  const [localToken, setLocalToken] = useState(localStorage.getItem("access"));
-  const userDropdownRef = useRef(null);
-  const dropdownRefs = useRef({});
-  const [openDropdown, setOpenDropdown] = useState(null);
+  const [localToken, setLocalToken] = useState(localStorage.getItem("access")); // renamed to avoid conflict
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // NEW: track if token is valid
+  const dropdownRef = useRef(null);
+  const inventoryDropdownRef = useRef(null);
+  const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { getCartItemCount, clearCart, setToken } = useCart();
@@ -41,6 +42,38 @@ export default function Navbar({ role, loadingRole }) {
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [setToken]);
+
+  // NEW: Validate token on mount
+  useEffect(() => {
+    const token = localStorage.getItem("access");
+    if (!token) {
+      setIsAuthenticated(false);
+      setLocalToken(null);
+      return;
+    }
+    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => {
+        if (res.ok) {
+          setIsAuthenticated(true);
+          setLocalToken(token);
+        } else {
+          setIsAuthenticated(false);
+          setLocalToken(null);
+          localStorage.removeItem("access");
+          localStorage.removeItem("refresh");
+          localStorage.removeItem("user.id");
+        }
+      })
+      .catch(() => {
+        setIsAuthenticated(false);
+        setLocalToken(null);
+        localStorage.removeItem("access");
+        localStorage.removeItem("refresh");
+        localStorage.removeItem("user.id");
+      });
+  }, []);
 
   const handlePageNavigation = (path) => {
     navigate(path);
@@ -187,14 +220,14 @@ export default function Navbar({ role, loadingRole }) {
                 );
               })}
             </div>
-            {localToken && role === "admin" && (
+            {isAuthenticated && role === "admin" && (
               <li className="navbar-cart">
                 <div className="cart-icon-container" onClick={() => setShowAdminCartModal(true)}>
                   <img src={ShoppingCartIcon} alt="cart" style={{ cursor: "pointer" }} />
                 </div>
               </li>
             )}
-            {localToken && role === "reseller" && (
+            {isAuthenticated && role === "reseller" && (
               <li className="navbar-cart">
                 <div className="cart-icon-container" onClick={() => navigate("/cart")}>
                   <img src={ShoppingCartIcon} alt="cart" style={{ cursor: "pointer" }} />
@@ -205,8 +238,8 @@ export default function Navbar({ role, loadingRole }) {
             <li className="navbar-user" ref={userDropdownRef}>
               <img src={UserIcon} alt="user" onClick={() => setShowDropdown((prev) => !prev)} />
               {showDropdown && (
-                <div className="navbar-dropdown">
-                  {localToken ? (
+                <div ref={dropdownRef} className="navbar-dropdown">
+                  {isAuthenticated ? (
                     <>
                       <button
                         className="navbar-dropdown-btn"
@@ -227,9 +260,10 @@ export default function Navbar({ role, loadingRole }) {
                           localStorage.removeItem("refresh");
                           localStorage.removeItem("username");
                           clearCart();
-                          setLocalToken(null);
+                          setLocalToken(null); // update local state
                           localStorage.removeItem("user.id");
-                          setToken(null);
+                          setToken(null); // update context token
+                          setIsAuthenticated(false); // update auth state
                           setShowDropdown(false);
                           navigate("/");
                         }}
