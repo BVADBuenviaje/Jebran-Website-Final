@@ -54,6 +54,7 @@ class ProductIngredient(models.Model):
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="ingredient_products")
     quantity = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     uom = models.CharField(max_length=20, blank=True, help_text="e.g. kg, L, piece")
+    is_enabled = models.BooleanField(default=True, help_text="Disable to temporarily exclude this ingredient from production calculations")
 
     class Meta:
         unique_together = ("product", "ingredient")
@@ -255,6 +256,22 @@ class Order(models.Model):
     paymongo_status = models.CharField(max_length=50, blank=True, null=True)
 
     is_temporary = models.BooleanField(default=False, help_text="True if this is a temporary order pending payment confirmation")
+    production_batch = models.ForeignKey(
+        "ProductionBatch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        help_text="Production batch this order is assigned to",
+    )
+    production_batch_assigned_at = models.DateTimeField(null=True, blank=True)
+    production_batch_assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_batch_orders",
+    )
 
     def __str__(self):
         return f"Order {self.id} by {self.user.username}"
@@ -263,6 +280,131 @@ class Order(models.Model):
         ordering = ['-created_at']
         verbose_name = "Order"
         verbose_name_plural = "Orders"
+
+
+class ProductionWindowConfig(models.Model):
+    """Singleton model storing default intake window for production batches."""
+
+    default_start_time = models.TimeField(default="22:00")
+    default_end_time = models.TimeField(default="21:59")
+    timezone = models.CharField(max_length=64, default="Asia/Manila")
+    allow_custom_windows = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Production Window Configuration"
+        verbose_name_plural = "Production Window Configuration"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # enforce singleton
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class ProductionBatch(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_COMPLETED = "completed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_batches",
+    )
+    produced_at = models.DateTimeField(null=True, blank=True)
+    produced_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="produced_batches",
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancelled_batches",
+    )
+    cancelled_reason = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    requirements_snapshot = models.JSONField(null=True, blank=True)
+    requirements_snapshot_captured_at = models.DateTimeField(null=True, blank=True)
+    orders_snapshot = models.JSONField(null=True, blank=True)
+    orders_snapshot_captured_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-window_start"]
+        verbose_name = "Production Batch"
+        verbose_name_plural = "Production Batches"
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["window_start", "window_end"]),
+        ]
+
+    def __str__(self):
+        label = self.window_start.strftime("%Y-%m-%d %H:%M")
+        return f"Batch {self.pk} ({label})"
+
+
+class ProductionBatchOrder(models.Model):
+    batch = models.ForeignKey(ProductionBatch, on_delete=models.CASCADE, related_name="batch_orders")
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="batch_assignment")
+    sequence = models.PositiveIntegerField(default=0, help_text="Manual ordering within the batch")
+    adjustment_payload = models.JSONField(blank=True, null=True, help_text="Overrides applied for this order before production")
+    notes = models.TextField(blank=True)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="batch_order_assignments",
+    )
+
+    class Meta:
+        ordering = ["sequence", "order_id"]
+        verbose_name = "Production Batch Order"
+        verbose_name_plural = "Production Batch Orders"
+
+    def __str__(self):
+        return f"Order {self.order_id} in Batch {self.batch_id}"
+
+
+class IngredientConsumption(models.Model):
+    production_batch = models.ForeignKey(ProductionBatch, on_delete=models.CASCADE, related_name="ingredient_consumptions")
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="production_consumptions")
+    ingredient_batch = models.ForeignKey(IngredientBatch, on_delete=models.PROTECT, related_name="production_consumptions")
+    quantity_used = models.DecimalField(max_digits=12, decimal_places=3)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    unit_cost_snapshot = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Optional capture of cost basis")
+
+    class Meta:
+        verbose_name = "Ingredient Consumption"
+        verbose_name_plural = "Ingredient Consumptions"
+        indexes = [
+            models.Index(fields=["production_batch", "ingredient"]),
+        ]
+
+    def __str__(self):
+        return f"{self.quantity_used} of {self.ingredient.name} for batch {self.production_batch_id}"
 
 
 class OrderItem(models.Model):

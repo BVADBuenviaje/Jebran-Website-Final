@@ -17,6 +17,10 @@ from .models import (
     OrderItem,
     Sale,
     CheckoutSession,
+    ProductionWindowConfig,
+    ProductionBatch,
+    ProductionBatchOrder,
+    IngredientConsumption,
     PAYMENT_METHOD_CHOICES,
     PAYMENT_STATUS_CHOICES,
 )
@@ -65,7 +69,7 @@ class ProductIngredientReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductIngredient
-        fields = ["name", "quantity", "uom"]
+        fields = ["name", "quantity", "uom", "is_enabled"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -92,7 +96,16 @@ class ProductSerializer(serializers.ModelSerializer):
             ing = self._get_or_create_ingredient(name)
             quantity = item.get("quantity")
             uom = (item.get("uom") or "").strip()
-            bulk.append(ProductIngredient(product=product, ingredient=ing, quantity=quantity, uom=uom))
+            is_enabled = item.get("is_enabled", True)
+            bulk.append(
+                ProductIngredient(
+                    product=product,
+                    ingredient=ing,
+                    quantity=quantity,
+                    uom=uom,
+                    is_enabled=is_enabled,
+                )
+            )
         if bulk:
             ProductIngredient.objects.bulk_create(bulk)
 
@@ -185,6 +198,8 @@ class IngredientBatchSerializer(serializers.ModelSerializer):
                 })
         return data
 
+
+
 class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), write_only=True, source='product')
@@ -227,14 +242,41 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     user = serializers.StringRelatedField(read_only=True)
+    production_batch = serializers.PrimaryKeyRelatedField(read_only=True)
+    production_batch_assigned_by_username = serializers.CharField(source="production_batch_assigned_by.username", read_only=True)
 
     class Meta:
         model = Order
         fields = [
-            "id", "user", "created_at", "total_price", "payment_method", "payment_status",
-            "address", "status", "payment_reference", "items", "is_temporary",
-            "paymongo_payment_intent_id", "paymongo_payment_method_id",
-            "paymongo_client_key", "paymongo_status"
+            "id",
+            "user",
+            "created_at",
+            "total_price",
+            "payment_method",
+            "payment_status",
+            "address",
+            "status",
+            "payment_reference",
+            "items",
+            "is_temporary",
+            "paymongo_payment_intent_id",
+            "paymongo_payment_method_id",
+            "paymongo_client_key",
+            "paymongo_status",
+            "production_batch",
+            "production_batch_assigned_at",
+            "production_batch_assigned_by",
+            "production_batch_assigned_by_username",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "created_at",
+            "items",
+            "production_batch",
+            "production_batch_assigned_at",
+            "production_batch_assigned_by",
+            "production_batch_assigned_by_username",
         ]
 
 
@@ -269,3 +311,188 @@ class CheckoutSessionSerializer(serializers.ModelSerializer):
         model = CheckoutSession
         fields = "__all__"
         read_only_fields = ("id", "paymongo_session_id", "status", "created_at", "metadata")
+
+
+class ProductionWindowConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductionWindowConfig
+        fields = ["default_start_time", "default_end_time", "timezone", "allow_custom_windows"]
+
+
+class ProductionBatchOrderSerializer(serializers.ModelSerializer):
+    order_detail = OrderSerializer(source="order", read_only=True)
+    assigned_by_username = serializers.CharField(source="assigned_by.username", read_only=True)
+
+    class Meta:
+        model = ProductionBatchOrder
+        fields = [
+            "id",
+            "batch",
+            "order",
+            "order_detail",
+            "sequence",
+            "adjustment_payload",
+            "notes",
+            "assigned_at",
+            "assigned_by",
+            "assigned_by_username",
+        ]
+        read_only_fields = ["id", "assigned_at", "assigned_by", "assigned_by_username"]
+
+
+class ProductionBatchListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for batch list views.
+    Reads disabled flags from pre-calculated requirements_snapshot only - no recalculation.
+    """
+    orders_count = serializers.SerializerMethodField()
+    has_disabled_ingredients = serializers.SerializerMethodField()
+    disabled_ingredient_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductionBatch
+        fields = [
+            "id",
+            "window_start",
+            "window_end",
+            "status",
+            "orders_count",
+            "has_disabled_ingredients",
+            "disabled_ingredient_count",
+        ]
+
+    def get_orders_count(self, obj):
+        """Read from annotation or snapshot - no query"""
+        annotated = getattr(obj, "orders_count", None)
+        if annotated is not None:
+            return annotated
+        if obj.orders_snapshot:
+            return len(obj.orders_snapshot)
+        return 0
+
+    def get_has_disabled_ingredients(self, obj):
+        """Read from snapshot only - NOT intensive"""
+        if not obj.requirements_snapshot:
+            return False
+        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        return len(disabled_list) > 0
+
+    def get_disabled_ingredient_count(self, obj):
+        """Read from snapshot only - NOT intensive"""
+        if not obj.requirements_snapshot:
+            return 0
+        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        # Count unique ingredient names
+        unique_ingredients = {
+            item.get("ingredient") for item in disabled_list if item.get("ingredient")
+        }
+        return len(unique_ingredients)
+
+
+class ProductionBatchSerializer(serializers.ModelSerializer):
+    produced_by_username = serializers.CharField(source="produced_by.username", read_only=True)
+    cancelled_by_username = serializers.CharField(source="cancelled_by.username", read_only=True)
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+    orders_count = serializers.SerializerMethodField()
+    has_disabled_ingredients = serializers.SerializerMethodField()
+    disabled_ingredient_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductionBatch
+        fields = [
+            "id",
+            "window_start",
+            "window_end",
+            "status",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "created_by_username",
+            "produced_at",
+            "produced_by",
+            "produced_by_username",
+            "cancelled_at",
+            "cancelled_by",
+            "cancelled_by_username",
+            "cancelled_reason",
+            "notes",
+            "requirements_snapshot",
+            "requirements_snapshot_captured_at",
+            "orders_snapshot",
+            "orders_snapshot_captured_at",
+            "orders_count",
+            "has_disabled_ingredients",
+            "disabled_ingredient_count",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "created_by_username",
+            "produced_at",
+            "produced_by",
+            "produced_by_username",
+            "cancelled_at",
+            "cancelled_by",
+            "cancelled_by_username",
+            "requirements_snapshot",
+            "requirements_snapshot_captured_at",
+            "orders_snapshot",
+            "orders_snapshot_captured_at",
+            "orders_count",
+            "has_disabled_ingredients",
+            "disabled_ingredient_count",
+        ]
+
+    def get_orders_count(self, obj):
+        annotated = getattr(obj, "orders_count", None)
+        if obj.orders_snapshot:
+            return len(obj.orders_snapshot)
+        if annotated is not None:
+            return annotated
+        return obj.orders.count()
+
+    def _requirements_payload(self, obj):
+        snap = obj.requirements_snapshot
+        if isinstance(snap, dict):
+            return snap
+        # Only compute for pending batches to avoid expensive recalculation for historical ones
+        if obj.status == obj.STATUS_PENDING:
+            try:
+                from .production import ProductionService
+                service = ProductionService()
+                req = service.calculate_requirements(obj)
+                return service.build_requirements_payload(req)
+            except Exception:
+                return {}
+        return {}
+
+    def get_has_disabled_ingredients(self, obj):
+        payload = self._requirements_payload(obj)
+        disabled = payload.get("disabled", [])
+        return bool(disabled)
+
+    def get_disabled_ingredient_count(self, obj):
+        payload = self._requirements_payload(obj)
+        return len(payload.get("disabled", []))
+
+
+class IngredientConsumptionSerializer(serializers.ModelSerializer):
+    ingredient_detail = IngredientSerializer(source="ingredient", read_only=True)
+    ingredient_batch_detail = IngredientBatchSerializer(source="ingredient_batch", read_only=True)
+
+    class Meta:
+        model = IngredientConsumption
+        fields = [
+            "id",
+            "production_batch",
+            "ingredient",
+            "ingredient_detail",
+            "ingredient_batch",
+            "ingredient_batch_detail",
+            "quantity_used",
+            "recorded_at",
+            "unit_cost_snapshot",
+        ]
+        read_only_fields = ["id", "recorded_at"]

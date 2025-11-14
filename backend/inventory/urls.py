@@ -11,6 +11,10 @@ from .views import (
     IngredientBatchViewSet,
     OrderViewSet,
     SalesViewSet,
+    ProductionBatchViewSet,
+    ProductionBatchOrderViewSet,
+    IngredientConsumptionViewSet,
+    ProductionWindowConfigView,
     CreateCheckoutSessionAPIView,
     PaymongoWebhookAPIView,
 )
@@ -26,8 +30,12 @@ router.register(r'batches', IngredientBatchViewSet, basename='batches')
 router.register(r'cart', CartViewSet, basename='cart')
 router.register(r'orders', OrderViewSet, basename='orders')
 router.register(r'sales', SalesViewSet, basename='sales')
+router.register(r'production-batches', ProductionBatchViewSet, basename='production-batches')
+router.register(r'production-batch-orders', ProductionBatchOrderViewSet, basename='production-batch-orders')
+router.register(r'production-consumptions', IngredientConsumptionViewSet, basename='production-consumptions')
 
 urlpatterns = router.urls + [
     path('create-checkout-session/', CreateCheckoutSessionAPIView.as_view(), name='create-checkout-session'),
     path('webhook/paymongo/', PaymongoWebhookAPIView, name='paymongo-webhook-new'),
+    path('production/window-config/', ProductionWindowConfigView.as_view(), name='production-window-config'),
 ]

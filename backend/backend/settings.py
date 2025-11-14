@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'accounts',
     'api',
-    'inventory',
+    'inventory.apps.InventoryConfig',  # Use full path to ensure signals are loaded
     'django_filters',
 ]
 

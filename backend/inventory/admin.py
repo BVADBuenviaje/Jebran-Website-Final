@@ -9,6 +9,10 @@ from .models import (
     ResupplyOrderItem,
     Order,
     OrderItem,
+    ProductionBatch,
+    ProductionBatchOrder,
+    ProductionWindowConfig,
+    IngredientConsumption,
 )
 
 
@@ -78,12 +82,21 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ["id", "user", "payment_method", "total_price", "status", "created_at"]
+    list_display = ["id", "user", "payment_method", "total_price", "status", "production_batch", "created_at"]
     list_editable = ["status"]
     list_filter = ["status", "payment_method", "created_at"]
     search_fields = ["user__username", "id"]
     inlines = [OrderItemInline]
-    readonly_fields = ["user", "payment_method", "total_price", "created_at", "address"]
+    readonly_fields = [
+        "user",
+        "payment_method",
+        "total_price",
+        "created_at",
+        "address",
+        "production_batch",
+        "production_batch_assigned_at",
+        "production_batch_assigned_by",
+    ]
 
     def has_add_permission(self, request):
         return False
@@ -98,3 +111,37 @@ class OrderAdmin(admin.ModelAdmin):
 
 # register batches (simple registration)
 admin.site.register(IngredientBatch)
+
+
+@admin.register(ProductionBatch)
+class ProductionBatchAdmin(admin.ModelAdmin):
+    list_display = ("id", "window_start", "window_end", "status", "created_by", "produced_at")
+    list_filter = ("status",)
+    search_fields = ("notes",)
+    readonly_fields = ("created_at", "updated_at", "produced_at", "produced_by", "cancelled_at", "cancelled_by")
+
+
+@admin.register(ProductionBatchOrder)
+class ProductionBatchOrderAdmin(admin.ModelAdmin):
+    list_display = ("order", "batch", "sequence", "assigned_by", "assigned_at")
+    list_filter = ("batch",)
+    search_fields = ("order__id", "order__user__username")
+    autocomplete_fields = ("batch", "order", "assigned_by")
+
+
+@admin.register(IngredientConsumption)
+class IngredientConsumptionAdmin(admin.ModelAdmin):
+    list_display = ("production_batch", "ingredient", "ingredient_batch", "quantity_used", "recorded_at")
+    list_filter = ("production_batch", "ingredient")
+    search_fields = ("ingredient__name", "production_batch__id")
+
+
+@admin.register(ProductionWindowConfig)
+class ProductionWindowConfigAdmin(admin.ModelAdmin):
+    list_display = ("default_start_time", "default_end_time", "timezone", "updated_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

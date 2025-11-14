@@ -1,7 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Link } from "react-router-dom";
 import { 
-  ArrowLeft, 
   Search, 
   Download, 
   TrendingUp, 
@@ -231,21 +229,13 @@ export default function SalesManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
+      <div className="max-w-7xl mx-auto px-4 pb-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 mt-20">
-          <div className="flex items-center gap-4">
-            <Link to="/admin-orders">
-              <button className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 text-sm">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Orders
-              </button>
-            </Link>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Sales Management</h1>
-              <p className="text-gray-500">Comprehensive sales analytics and reporting</p>
-            </div>
+        <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Sales Management</h1>
+            <p className="text-gray-500">Comprehensive sales analytics and reporting</p>
           </div>
           <div className="flex items-center gap-3">
             <button 

@@ -11,31 +11,32 @@ import AdminCartModal from "./AdminCartModal";
 export default function Navbar({ role, loadingRole }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showAdminCartModal, setShowAdminCartModal] = useState(false);
-  const [localToken, setLocalToken] = useState(localStorage.getItem("access")); // renamed to avoid conflict
-  const dropdownRef = useRef(null);
-  const inventoryDropdownRef = useRef(null);
-  const [showInventoryDropdown, setShowInventoryDropdown] = useState(false);
+  const [localToken, setLocalToken] = useState(localStorage.getItem("access"));
+  const userDropdownRef = useRef(null);
+  const dropdownRefs = useRef({});
+  const [openDropdown, setOpenDropdown] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { getCartItemCount, clearCart, setToken } = useCart();
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
-      if (inventoryDropdownRef.current && !inventoryDropdownRef.current.contains(event.target)) {
-        setShowInventoryDropdown(false);
+      if (openDropdown && dropdownRefs.current[openDropdown] && !dropdownRefs.current[openDropdown].contains(event.target)) {
+        setOpenDropdown(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [openDropdown]);
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setLocalToken(localStorage.getItem("access"));
-      setToken(localStorage.getItem("access")); // update context token
+      const access = localStorage.getItem("access");
+      setLocalToken(access);
+      setToken(access);
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
@@ -63,40 +64,42 @@ export default function Navbar({ role, loadingRole }) {
     }
   };
 
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
+  const isActive = (path) => location.pathname === path;
 
-  // Admin links (with Inventory dropdown)
   const adminLinks = [
     { label: "Home", path: "/" },
-    { label: "Users", path: "/dashboard" },
-    { label: "Products", path: "/products" },
-    { label: "Admin Orders", path: "/admin-orders" },
-    { label: "Sales Management", path: "/sales-management" },
+    {
+      label: "Operations",
+      type: "dropdown",
+      items: [
+        { label: "Production", path: "/production" },
+        { label: "Admin Orders", path: "/admin-orders" },
+        { label: "Sales Management", path: "/sales-management" },
+        { label: "Resupply Orders", path: "/resupply-orders" },
+      ],
+    },
     {
       label: "Inventory",
       type: "dropdown",
       items: [
+        { label: "Products", path: "/products" },
         { label: "Ingredients", path: "/ingredients" },
         { label: "Suppliers", path: "/suppliers" },
-        { label: "Resupply Orders", path: "/resupply-orders" },
       ],
     },
+    { label: "Users", path: "/dashboard" },
   ];
 
-  // Regular user links
   const userLinks = [
     { label: "Home", path: "/" },
     { label: "Products", path: "/#products" },
-    { label: "Orders", path: "/orders" },           // <-- Add this line
+    { label: "Orders", path: "/orders" },
     { label: "About", path: "/#about" },
     { label: "Contact", path: "/#contact" },
   ];
 
   const linksToShow = role === "admin" ? adminLinks : userLinks;
 
-  // Show nothing or a spinner while loading role
   if (loadingRole) {
     return (
       <div className="flex justify-center items-center h-16">
@@ -114,25 +117,45 @@ export default function Navbar({ role, loadingRole }) {
               <img src={logo} alt="logo" />
             </li>
             <div className="navbar-links">
-              {linksToShow.map(link => {
+              {linksToShow.map((link) => {
                 if (link.type === "dropdown") {
+                  const isOpen = openDropdown === link.label;
                   return (
-                    <li key={link.label} className={`navbar-link ${showInventoryDropdown ? 'active' : ''}`} ref={inventoryDropdownRef} onClick={() => setShowInventoryDropdown(prev => !prev)} style={{ position: 'relative' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <li
+                      key={link.label}
+                      className={`navbar-link ${isOpen ? "active" : ""}`}
+                      ref={(el) => {
+                        if (el) {
+                          dropdownRefs.current[link.label] = el;
+                        } else {
+                          delete dropdownRefs.current[link.label];
+                        }
+                      }}
+                      onClick={() => setOpenDropdown(isOpen ? null : link.label)}
+                      style={{ position: "relative" }}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                         {link.label}
-                        <span className={`chevron ${showInventoryDropdown ? 'open' : ''}`} style={{ display: 'inline-block', transition: 'transform 150ms ease', transform: showInventoryDropdown ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                        <span
+                          className={`chevron ${isOpen ? "open" : ""}`}
+                          style={{
+                            display: "inline-block",
+                            transition: "transform 150ms ease",
+                            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                          }}
+                        >
                           ▾
                         </span>
                       </span>
-                      {showInventoryDropdown && (
-                        <div className="navbar-dropdown navbar-dropdown-left" style={{ minWidth: 180 }}>
-                          {link.items.map(item => (
+                      {isOpen && (
+                        <div className="navbar-dropdown navbar-dropdown-left" style={{ minWidth: 200 }}>
+                          {link.items.map((item) => (
                             <button
                               key={item.label}
                               className="navbar-dropdown-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setShowInventoryDropdown(false);
+                                setOpenDropdown(null);
                                 handlePageNavigation(item.path);
                               }}
                             >
@@ -144,10 +167,11 @@ export default function Navbar({ role, loadingRole }) {
                     </li>
                   );
                 }
+
                 return (
                   <li
                     key={link.label}
-                    className={`navbar-link ${isActive(link.path) ? 'active' : ''}`}
+                    className={`navbar-link ${isActive(link.path) ? "active" : ""}`}
                     onClick={() => {
                       if (link.path === "/" || link.path === "/home") {
                         handleSectionScroll("home");
@@ -165,52 +189,29 @@ export default function Navbar({ role, loadingRole }) {
             </div>
             {localToken && role === "admin" && (
               <li className="navbar-cart">
-                <div
-                  className="cart-icon-container"
-                  onClick={() => setShowAdminCartModal(true)}
-                >
-                  <img
-                    src={ShoppingCartIcon}
-                    alt="cart"
-                    style={{ cursor: 'pointer' }}
-                  />
+                <div className="cart-icon-container" onClick={() => setShowAdminCartModal(true)}>
+                  <img src={ShoppingCartIcon} alt="cart" style={{ cursor: "pointer" }} />
                 </div>
               </li>
             )}
             {localToken && role === "reseller" && (
               <li className="navbar-cart">
-                <div
-                  className="cart-icon-container"
-                  onClick={() => navigate('/cart')}
-                >
-                  <img
-                    src={ShoppingCartIcon}
-                    alt="cart"
-                    style={{ cursor: 'pointer' }}
-                  />
-                  {getCartItemCount() > 0 && (
-                    <span className="cart-item-count">
-                      {getCartItemCount()}
-                    </span>
-                  )}
+                <div className="cart-icon-container" onClick={() => navigate("/cart")}>
+                  <img src={ShoppingCartIcon} alt="cart" style={{ cursor: "pointer" }} />
+                  {getCartItemCount() > 0 && <span className="cart-item-count">{getCartItemCount()}</span>}
                 </div>
               </li>
             )}
-            <li className="navbar-user">
-              <img
-                src={UserIcon}
-                alt="user"
-                onClick={() => setShowDropdown((prev) => !prev)}
-              />
+            <li className="navbar-user" ref={userDropdownRef}>
+              <img src={UserIcon} alt="user" onClick={() => setShowDropdown((prev) => !prev)} />
               {showDropdown && (
-                <div ref={dropdownRef} className="navbar-dropdown">
+                <div className="navbar-dropdown">
                   {localToken ? (
                     <>
                       <button
                         className="navbar-dropdown-btn"
                         onClick={() => {
                           setShowDropdown(false);
-                          // Get user ID from localStorage (make sure you store it after login)
                           const userId = localStorage.getItem("user.id");
                           if (userId) {
                             navigate(`/users/${userId}`);
@@ -225,10 +226,10 @@ export default function Navbar({ role, loadingRole }) {
                           localStorage.removeItem("access");
                           localStorage.removeItem("refresh");
                           localStorage.removeItem("username");
-                        clearCart();
-                        setLocalToken(null); // update local state
+                          clearCart();
+                          setLocalToken(null);
                           localStorage.removeItem("user.id");
-                          setToken(null); // update context token
+                          setToken(null);
                           setShowDropdown(false);
                           navigate("/");
                         }}
@@ -238,16 +239,10 @@ export default function Navbar({ role, loadingRole }) {
                     </>
                   ) : (
                     <>
-                      <button
-                        className="navbar-dropdown-btn"
-                        onClick={() => navigate('/login')}
-                      >
+                      <button className="navbar-dropdown-btn" onClick={() => navigate("/login")}>
                         Login
                       </button>
-                      <button
-                        className="navbar-dropdown-btn"
-                        onClick={() => navigate('/signup')}
-                      >
+                      <button className="navbar-dropdown-btn" onClick={() => navigate("/signup")}>
                         Signup
                       </button>
                     </>
@@ -258,9 +253,7 @@ export default function Navbar({ role, loadingRole }) {
           </ul>
         </nav>
       </StickyHeadroom>
-      {showAdminCartModal && (
-        <AdminCartModal onClose={() => setShowAdminCartModal(false)} />
-      )}
+      {showAdminCartModal && <AdminCartModal onClose={() => setShowAdminCartModal(false)} />}
     </>
   );
 }
