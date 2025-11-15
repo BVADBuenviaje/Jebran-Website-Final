@@ -57,7 +57,12 @@ class PayMongoWebhookView(View):
     def handle_payment_success(self, event_data):
         """Handle successful payment"""
         try:
-            payment_intent_id = event_data.get('id')
+            logger.info(f"Webhook payment success event_data: {json.dumps(event_data, indent=2)}")  # Add this line
+            payment_intent_id = (
+                event_data.get('attributes', {}).get('payment_intent_id') or
+                event_data.get('attributes', {}).get('resource', {}).get('id') or
+                event_data.get('id')
+            )
             if not payment_intent_id:
                 logger.error("No payment intent ID in webhook data")
                 return

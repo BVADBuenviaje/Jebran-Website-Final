@@ -10,9 +10,14 @@ import { useCart } from "../contexts/CartContext";
 import ToastNotification from "../components/ToastNotification";
 import AOS from "aos";
 import "aos/dist/aos.css";
+import { refreshToken } from "../utils/auth";
+import { useLocation } from "react-router-dom";
+
+
 
 const Home = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     AOS.init({ once: true, duration: 1000, offset: 120 });
@@ -61,19 +66,31 @@ const Home = () => {
   // Using shared fetchWithAuth which auto-refreshes access tokens on 401
 
   useEffect(() => {
-    const token = localStorage.getItem("access");
-    if (!token) {
-      setRole(null);
-      return;
+    async function checkAuth() {
+      const access = localStorage.getItem("access");
+      const refresh = localStorage.getItem("refresh");
+      console.log("checkAuth called");
+      let token = access;
+      if (!token && refresh) {
+        console.log("No access token, trying to refresh...");
+        token = await refreshToken();
+      }
+      if (!token) {
+        console.log("No token available, logging out.");
+        setRole(null);
+        return;
+      }
+      fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && data.role) setRole(data.role);
+          else setRole(null);
+        })
+        .catch(() => setRole(null));
     }
-    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/me/`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.role) setRole(data.role);
-        else setRole(null);
-      })
-      .catch(() => setRole(null));
-  }, []);
+
+    checkAuth();
+  }, [location]);
 
   useEffect(() => {
     if (role === "reseller" && window.location.pathname === "/dashboard") {

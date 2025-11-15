@@ -1,6 +1,6 @@
 import React from "react";
 
-const SupplierProfile = ({ supplier, onEdit, onAddProduct }) => {
+const SupplierProfile = ({ supplier, onEdit, onAddProduct, onBlock }) => {
   if (!supplier) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
@@ -19,6 +19,9 @@ const SupplierProfile = ({ supplier, onEdit, onAddProduct }) => {
     if (onEdit) onEdit(supplier);
   };
 
+  const supplierName = supplier.name ?? supplier.company_name ?? "Unknown Supplier";
+  const supplierInitial = (supplierName && supplierName.length) ? supplierName.charAt(0).toUpperCase() : "?";
+
   return (
     <div className="h-full flex flex-col">
       {/* Header Section */}
@@ -26,11 +29,11 @@ const SupplierProfile = ({ supplier, onEdit, onAddProduct }) => {
         <div className="flex items-center">
           <div className="w-12 h-12 bg-[#f08b51] rounded-full flex items-center justify-center mr-3">
             <span className="text-white font-bold text-lg">
-              {supplier.name.charAt(0).toUpperCase()}
+              {supplierInitial}
             </span>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{supplier.name}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{supplierName}</h2>
             <p className="text-sm text-gray-500">Supplier Details</p>
           </div>
         </div>
@@ -81,9 +84,12 @@ const SupplierProfile = ({ supplier, onEdit, onAddProduct }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="text-sm text-gray-600">Status:</span>
-            <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-              supplier.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-            }`}>
+            <span
+              className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full cursor-pointer ${supplier.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+              title={supplier.is_active ? "Click to block supplier" : "Click to unblock supplier"}
+              onClick={() => onBlock && onBlock({ ...supplier, is_active: !supplier.is_active })}
+              style={{ userSelect: "none" }}
+            >
               {supplier.is_active ? "Active" : "Blocked"}
             </span>
           </div>
@@ -110,42 +116,58 @@ const SupplierProfile = ({ supplier, onEdit, onAddProduct }) => {
             Add
           </button>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto">
           {supplier.ingredients_supplied && supplier.ingredients_supplied.length > 0 ? (
-            <div className="space-y-3">
-              {supplier.ingredients_supplied
-                .filter(item => item.is_active !== false)
-                .map((item) => (
-                  <div
-                    key={item.ingredient.id}
-                    className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-[#f08b51] rounded-full flex items-center justify-center mr-3">
-                          <span className="text-white font-semibold text-sm">
-                            {item.ingredient.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <h4 className="font-medium text-gray-900">{item.ingredient.name}</h4>
-                          <p className="text-sm text-gray-500">
-                            {item.ingredient.unit_of_measurement || "No unit specified"}
-                          </p>
+              <div className="space-y-3">
+                {supplier.ingredients_supplied
+                  .filter(item => {
+                    // Support both ingredient_detail and ingredient
+                    const ing = item.ingredient_detail ?? item.ingredient ?? {};
+                    return (
+                      item.is_active !== false &&
+                      item.is_active !== 0 &&
+                      item.is_active !== "false" &&
+                      ing.is_active !== false &&
+                      ing.is_active !== 0 &&
+                      ing.is_active !== "false"
+                    );
+                  })
+                  .map((item, idx) => {
+                    const ing = item.ingredient ?? {};
+                    const ingName = ing.name ?? item.name ?? "Unknown";
+                    const ingInitial = (ingName && ingName.length) ? ingName.charAt(0).toUpperCase() : "?";
+                    const key = item.id ?? (ing.id ? `${ing.id}-${idx}` : `idx-${idx}`);
+
+                    return (
+                      <div
+                        key={key}
+                        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 bg-[#f08b51] rounded-full flex items-center justify-center mr-3">
+                              <span className="text-white font-semibold text-sm">{ingInitial}</span>
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">{ingName}</h4>
+                              <p className="text-sm text-gray-500">
+                                {ing.unit_of_measurement || "No unit specified"}
+                              </p>
+                            </div>
+                          </div>
+                          {item.price && (
+                            <div className="text-right">
+                              <p className="text-lg font-semibold text-[#f08b51]">₱{item.price}</p>
+                              <p className="text-xs text-gray-500">per unit</p>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      {item.price && (
-                        <div className="text-right">
-                          <p className="text-lg font-semibold text-[#f08b51]">₱{item.price}</p>
-                          <p className="text-xs text-gray-500">per unit</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          ) : (
+                    );
+                  })}
+              </div>
+            ) : (
             <div className="flex flex-col items-center justify-center h-full text-center py-8">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                 <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

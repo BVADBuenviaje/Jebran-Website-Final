@@ -1,16 +1,18 @@
+from decimal import Decimal
 from django.db import models
 from django.conf import settings
+from django.db.models import Sum, Min
+
 
 class Ingredient(models.Model):
     name = models.CharField(max_length=100, unique=True)
     unit_of_measurement = models.CharField(max_length=20, help_text="e.g. kg, liter, piece")
     default_unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    restock_level = models.DecimalField(max_digits=12, decimal_places=3, help_text="Minimum quantity before restocking")
+    restock_level = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, help_text="Minimum quantity before restocking")
     is_active = models.BooleanField(default=True)
-    # New fields
+
+    # category kept
     category = models.CharField(max_length=50, blank=True, help_text="e.g. Produce, Meat, Dry Goods")
-    expiry_date = models.DateField(null=True, blank=True)
-    current_stock = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, help_text="Current available quantity")
 
     def __str__(self):
         return self.name
@@ -20,16 +22,24 @@ class Ingredient(models.Model):
         verbose_name = "Ingredient"
         verbose_name_plural = "Ingredients"
 
+    @property
+    def total_stock(self):
+        agg = self.batches.aggregate(total=Sum('current_quantity'))
+        return Decimal(agg['total'] or 0)
+
+    @property
+    def next_expiry_date(self):
+        agg = self.batches.filter(current_quantity__gt=0).aggregate(next_expiry=Min('expiry_date'))
+        return agg['next_expiry']
+
+
 class Product(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    # category = models.CharField(max_length=50, blank=True, help_text="e.g. Produce, Meat, Dry Goods")
     price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    # stock = models.IntegerField(null=True, blank=True, help_text="Current stock quantity")
     status = models.CharField(max_length=20, choices=[("Active", "Active"), ("Inactive", "Inactive")], default="Active")
     image = models.ImageField(upload_to='products/', null=True, blank=True, help_text="Product image")
-    description = models.TextField(blank=True, help_text="Detailed description of the product")  # <-- added field
+    description = models.TextField(blank=True, help_text="Detailed description of the product")
 
-    # through will be defined below; placeholder for type reference
     def __str__(self):
         return self.name
 
@@ -37,6 +47,7 @@ class Product(models.Model):
         ordering = ["name"]
         verbose_name = "Product"
         verbose_name_plural = "Products"
+
 
 class ProductIngredient(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="product_ingredients")
@@ -49,15 +60,16 @@ class ProductIngredient(models.Model):
         verbose_name = "Product Ingredient"
         verbose_name_plural = "Product Ingredients"
 
-# Define M2M using through model after classes exist
+
 Product.add_to_class('ingredients', models.ManyToManyField(Ingredient, through=ProductIngredient, related_name="products", blank=True))
+
 
 class Supplier(models.Model):
     name = models.CharField(max_length=100, unique=True)
     contact_number = models.CharField(max_length=30, blank=True)
     email = models.EmailField(max_length=100, blank=True)
     address = models.CharField(max_length=200, blank=True)
-    is_active = models.BooleanField(default=True)  # Added is_active field
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
@@ -67,12 +79,12 @@ class Supplier(models.Model):
         verbose_name = "Supplier"
         verbose_name_plural = "Suppliers"
 
+
 class IngredientSupplier(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name="ingredient_suppliers")
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="ingredient_suppliers")
     price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Supplier-specific price for this ingredient")
     is_active = models.BooleanField(default=True)
-
 
     class Meta:
         unique_together = ("supplier", "ingredient")
@@ -82,6 +94,7 @@ class IngredientSupplier(models.Model):
     def __str__(self):
         return f"{self.supplier.name} supplies {self.ingredient.name} at {self.price}"
 
+
 class ResupplyOrder(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name="resupply_orders")
     status = models.CharField(
@@ -89,7 +102,7 @@ class ResupplyOrder(models.Model):
         choices=[
             ("Pending", "Pending"),
             ("Delivered", "Delivered"),
-            ("Canceled", "Canceled")   # <-- Add this line
+            ("Canceled", "Canceled")
         ],
         default="Pending"
     )
@@ -104,13 +117,76 @@ class ResupplyOrder(models.Model):
     def __str__(self):
         return f"Order {self.id} for {self.supplier.name}"
 
+
 class ResupplyOrderItem(models.Model):
     order = models.ForeignKey(ResupplyOrder, related_name="items", on_delete=models.CASCADE)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
-    quantity = models.DecimalField(max_digits=12, decimal_places=3, help_text="Quantity ordered")
+
+    # source of truth after migration
+    quantity_ordered = models.DecimalField(max_digits=12, decimal_places=3)
 
     def __str__(self):
-        return f"{self.quantity} {self.ingredient.unit_of_measurement} of {self.ingredient.name}"
+        return f"{self.quantity_ordered} {self.ingredient.unit_of_measurement} of {self.ingredient.name}"
+
+    @property
+    def quantity_received(self):
+        agg = self.batches.aggregate(received=Sum('quantity_received'))
+        return Decimal(agg['received'] or 0)
+
+    @property
+    def is_fully_received(self):
+        return self.quantity_received >= (self.quantity_ordered or Decimal('0'))
+
+
+class IngredientBatch(models.Model):
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="batches")
+    order_item = models.ForeignKey(ResupplyOrderItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="batches")
+    quantity_received = models.DecimalField(max_digits=12, decimal_places=3, help_text="Amount delivered in this batch")
+    current_quantity = models.DecimalField(max_digits=12, decimal_places=3, help_text="Amount remaining in this batch")
+    expiry_date = models.DateField(null=True, blank=True)
+    received_date = models.DateTimeField(auto_now_add=True)
+    supplier_batch_code = models.CharField(max_length=200, null=True, blank=True, help_text="Optional supplier lot/batch code")
+
+    class Meta:
+        verbose_name = "Ingredient Batch"
+        verbose_name_plural = "Ingredient Batches"
+        ordering = ["expiry_date", "received_date"]
+        indexes = [models.Index(fields=["ingredient", "expiry_date"])]
+
+    def __str__(self):
+        uom = self.ingredient.unit_of_measurement or ""
+        return f"Batch #{self.id} — {self.ingredient.name} — {self.current_quantity} {uom}"
+
+    def reduce(self, amount):
+        amt = Decimal(amount)
+        if amt <= 0:
+            raise ValueError("amount must be positive")
+        if Decimal(self.current_quantity) < amt:
+            raise ValueError("not enough quantity in batch")
+        self.current_quantity = Decimal(self.current_quantity) - amt
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.order_item and self.order_item.ingredient_id != self.ingredient_id:
+            raise ValidationError("order_item.ingredient must match IngredientBatch.ingredient")
+
+    def save(self, *args, **kwargs):
+        # initialize current_quantity if not provided
+        if self.current_quantity is None and self.quantity_received is not None:
+            self.current_quantity = self.quantity_received
+
+        curr = Decimal(self.current_quantity) if self.current_quantity is not None else None
+        recv = Decimal(self.quantity_received) if self.quantity_received is not None else None
+
+        if curr is not None and curr < 0:
+            raise ValueError("current_quantity cannot be negative")
+        if curr is not None and recv is not None and curr > recv:
+            raise ValueError("current_quantity cannot exceed quantity_received")
+
+        # validate cross-field invariants
+        self.full_clean()
+        super().save(*args, **kwargs)
+
 
 class Cart(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cart")
@@ -138,20 +214,22 @@ class CartItem(models.Model):
     @property
     def subtotal(self):
         return (self.product.price or 0) * self.quantity
-    
+
+
 PAYMENT_METHOD_CHOICES = [
-        ('COD', 'Cash on Delivery'),
-        ('Online', 'Online Payment'),
-        ('GCash', 'gcash'),
-    ]
-    
+    ('COD', 'Cash on Delivery'),
+    ('Online', 'Online Payment'),
+    ('GCash', 'gcash'),
+]
+
 PAYMENT_STATUS_CHOICES = [
-        ("Unpaid", "Unpaid"),
-        ("Paid", "Paid"),
-        ("Pending", "Pending"),
-        ("Failed", "Failed"),
-        ("Refunded", "Refunded"),
-    ]
+    ("Unpaid", "Unpaid"),
+    ("Paid", "Paid"),
+    ("Pending", "Pending"),
+    ("Failed", "Failed"),
+    ("Refunded", "Refunded"),
+]
+
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -160,7 +238,6 @@ class Order(models.Model):
         ('Cancelled', 'Cancelled'),
         ('Delivery Failed', 'Delivery Failed'),
     ]
-    
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="orders")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -170,41 +247,42 @@ class Order(models.Model):
     address = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     payment_reference = models.CharField(max_length=255, blank=True, null=True)
-    
+
     # PayMongo fields
     paymongo_payment_intent_id = models.CharField(max_length=255, blank=True, null=True)
     paymongo_payment_method_id = models.CharField(max_length=255, blank=True, null=True)
     paymongo_client_key = models.CharField(max_length=255, blank=True, null=True)
     paymongo_status = models.CharField(max_length=50, blank=True, null=True)
-    
-    # Temporary order flag for GCash payments
+
     is_temporary = models.BooleanField(default=False, help_text="True if this is a temporary order pending payment confirmation")
-    
+
     def __str__(self):
         return f"Order {self.id} by {self.user.username}"
-    
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Order"
         verbose_name_plural = "Orders"
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
     price_at_purchase = models.DecimalField(max_digits=12, decimal_places=2)
-    
+
     def __str__(self):
         return f"{self.product.name} × {self.quantity} in Order {self.order.id}"
-    
+
     @property
     def subtotal(self):
         return self.price_at_purchase * self.quantity
-    
+
     class Meta:
         verbose_name = "Order Item"
         verbose_name_plural = "Order Items"
-        
+
+
 class Sale(models.Model):
     order = models.OneToOneField(
         Order,
@@ -227,6 +305,7 @@ class Sale(models.Model):
         ordering = ['-payment_date']
         verbose_name = "Sale"
         verbose_name_plural = "Sales"
+
 
 class CheckoutSession(models.Model):
     STATUS_CHOICES = [

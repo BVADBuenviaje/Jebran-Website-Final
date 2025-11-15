@@ -134,7 +134,12 @@ export default function SalesManagement() {
   };
 
   const filteredSales = useMemo(() => {
+
+    console.log(salesData.map(s => s.payment_status));
     return salesData.filter(sale => {
+      // Only show paid sales unless the filter is set to something else
+      if (statusFilter === "all" && sale.payment_status !== "Paid") return false;
+
       const matchesSearch = !searchTerm || 
         sale.order_details?.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         sale.payment_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||

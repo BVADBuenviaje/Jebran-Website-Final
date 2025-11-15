@@ -19,7 +19,7 @@ const AddSupplierModal = ({ open, onClose, onSubmit }) => {
     if (open) {
       fetch(`${import.meta.env.VITE_INVENTORY_URL}/ingredients/`)
         .then(res => res.json())
-        .then(data => setIngredients(data))
+        .then(data => setIngredients(Array.isArray(data) ? data.filter(i => i.is_active) : []))
         .catch(() => setIngredients([]));
     }
   }, [open]);

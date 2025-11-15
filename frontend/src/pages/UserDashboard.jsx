@@ -17,6 +17,7 @@ const UserDashboard = () => {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState(null);
   const [loadingRole, setLoadingRole] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
     fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/`)
@@ -38,6 +39,7 @@ const UserDashboard = () => {
     if (!token) {
       if (isMounted) {
         setRole(null);
+        setCurrentUserId(null);
         setLoadingRole(false);
       }
       return;
@@ -46,18 +48,20 @@ const UserDashboard = () => {
       .then(res => {
         if (!isMounted) return;
         if (res.ok) return res.json();
-        // If not ok, don't set role to null yet (wait for refresh)
         return null;
       })
       .then(data => {
         if (!isMounted) return;
         if (data && data.role) setRole(data.role);
-        else setRole(null); // Only set to null if refresh failed
+        else setRole(null);
+        if (data && data.id) setCurrentUserId(data.id);
+        else setCurrentUserId(null);
         setLoadingRole(false);
       })
       .catch(() => {
         if (!isMounted) return;
         setRole(null);
+        setCurrentUserId(null);
         setLoadingRole(false);
       });
     return () => { isMounted = false; };
@@ -92,6 +96,11 @@ const UserDashboard = () => {
   };
 
   const handleRoleChange = (user, newRole) => {
+    if (user.id === currentUserId) {
+      alert("You cannot change your own role.");
+      return;
+    }
+
     fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${user.id}/`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -312,6 +321,8 @@ const UserDashboard = () => {
                           value={user.role}
                           onChange={(e) => handleRoleChange(user, e.target.value)}
                           className="px-2 py-1 border border-gray-300 rounded text-xs bg-white"
+                          disabled={user.id === currentUserId}
+                          title={user.id === currentUserId ? "You cannot change your own role" : "Change role"}
                         >
                           <option value="customer">Customer</option>
                           <option value="reseller">Reseller</option>

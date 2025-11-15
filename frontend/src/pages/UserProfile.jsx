@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, User, FileText } from "lucide-react";
+import { fetchWithAuth } from "../utils/auth"; // Add this import
 
 function UserProfile() {
   const { id } = useParams();
@@ -9,13 +10,7 @@ function UserProfile() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("access");
-    fetch(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${id}/`, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/${id}/`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch user");
         return res.json();

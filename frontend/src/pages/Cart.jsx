@@ -199,7 +199,23 @@ const Cart = () => {
                                     <line x1="5" y1="12" x2="19" y2="12"/>
                                   </svg>
                                 </button>
-                                <span className="quantity-value">{item.quantity}</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="999"
+                                  value={item.quantity}
+                                  className="quantity-input"
+                                  style={{
+                                    width: "3.5em",
+                                    textAlign: "center",
+                                    padding: "2px 4px",
+                                    fontSize: "1rem",
+                                  }}
+                                  onChange={e => {
+                                    const val = Math.max(1, Math.min(999, Number(e.target.value) || 1));
+                                    updateQuantity(item.id, val);
+                                  }}
+                                />
                                 <button
                                   className="quantity-btn"
                                   onClick={() => handleUpdateQuantity(item.id, 1)}
