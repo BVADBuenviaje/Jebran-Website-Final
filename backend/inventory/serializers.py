@@ -348,7 +348,8 @@ class ProductionBatchOrderSerializer(serializers.ModelSerializer):
 class ProductionBatchListSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer for batch list views.
-    Reads disabled flags from pre-calculated requirements_snapshot only - no recalculation.
+    For pending batches, recalculates requirements to ensure real-time accuracy.
+    For non-pending batches, reads from pre-calculated requirements_snapshot.
     """
     orders_count = serializers.SerializerMethodField()
     has_disabled_items = serializers.SerializerMethodField()
@@ -357,6 +358,27 @@ class ProductionBatchListSerializer(serializers.ModelSerializer):
     disabled_product_count = serializers.SerializerMethodField()
     disabled_ingredient_count = serializers.SerializerMethodField()
     has_only_expired_stock = serializers.SerializerMethodField()
+    
+    def _get_requirements_payload(self, obj):
+        """Get requirements payload, recalculating for pending batches to ensure freshness"""
+        # For pending batches, always recalculate to get real-time data
+        # This ensures expired stock indicators update immediately
+        if obj.status == ProductionBatch.STATUS_PENDING:
+            try:
+                from .production import ProductionService
+                service = ProductionService()
+                req = service.calculate_requirements(obj)
+                return service.build_requirements_payload(req)
+            except Exception:
+                # Fallback to snapshot if recalculation fails
+                if obj.requirements_snapshot:
+                    return obj.requirements_snapshot
+                return {}
+        
+        # For non-pending batches, use snapshot
+        if obj.requirements_snapshot:
+            return obj.requirements_snapshot
+        return {}
 
     class Meta:
         model = ProductionBatch
@@ -385,30 +407,26 @@ class ProductionBatchListSerializer(serializers.ModelSerializer):
 
     def get_has_disabled_items(self, obj):
         """Check if there are any disabled items (products or ingredients)"""
-        if not obj.requirements_snapshot:
-            return False
-        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        payload = self._get_requirements_payload(obj)
+        disabled_list = payload.get("disabled", [])
         return len(disabled_list) > 0
 
     def get_has_disabled_products(self, obj):
-        """Read from snapshot only - NOT intensive"""
-        if not obj.requirements_snapshot:
-            return False
-        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        """Check for disabled products"""
+        payload = self._get_requirements_payload(obj)
+        disabled_list = payload.get("disabled", [])
         return any(item.get("reason") == "product_disabled" for item in disabled_list)
 
     def get_has_disabled_ingredients(self, obj):
-        """Read from snapshot only - NOT intensive"""
-        if not obj.requirements_snapshot:
-            return False
-        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        """Check for disabled ingredients"""
+        payload = self._get_requirements_payload(obj)
+        disabled_list = payload.get("disabled", [])
         return any(item.get("reason") in ("ingredient_disabled", "recipe_disabled") for item in disabled_list)
 
     def get_disabled_product_count(self, obj):
         """Count unique disabled products"""
-        if not obj.requirements_snapshot:
-            return 0
-        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        payload = self._get_requirements_payload(obj)
+        disabled_list = payload.get("disabled", [])
         unique_products = {
             item.get("product") for item in disabled_list 
             if item.get("reason") == "product_disabled" and item.get("product")
@@ -417,9 +435,8 @@ class ProductionBatchListSerializer(serializers.ModelSerializer):
 
     def get_disabled_ingredient_count(self, obj):
         """Count unique disabled ingredients"""
-        if not obj.requirements_snapshot:
-            return 0
-        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        payload = self._get_requirements_payload(obj)
+        disabled_list = payload.get("disabled", [])
         unique_ingredients = {
             item.get("ingredient") for item in disabled_list 
             if item.get("ingredient") and item.get("reason") in ("ingredient_disabled", "recipe_disabled")
@@ -427,10 +444,9 @@ class ProductionBatchListSerializer(serializers.ModelSerializer):
         return len(unique_ingredients)
 
     def get_has_only_expired_stock(self, obj):
-        """Read from snapshot only - NOT intensive"""
-        if not obj.requirements_snapshot:
-            return False
-        return obj.requirements_snapshot.get("has_only_expired_stock", False)
+        """Check for expired stock, recalculating for pending batches to ensure real-time accuracy"""
+        payload = self._get_requirements_payload(obj)
+        return payload.get("has_only_expired_stock", False)
 
 
 class ProductionBatchSerializer(serializers.ModelSerializer):
