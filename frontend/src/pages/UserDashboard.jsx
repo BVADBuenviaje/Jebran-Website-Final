@@ -155,8 +155,11 @@ const UserDashboard = () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_blocked: user.is_blocked }),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to update block status");
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.detail || "Failed to update block status");
+        }
         return res.json();
       })
       .then((updatedUser) => {
@@ -375,9 +378,27 @@ const UserDashboard = () => {
                         </select>
                         <button
                           onClick={() => handleBlock({...user, is_blocked: !user.is_blocked})}
+                          disabled={
+                            (role === "admin" && (user.role === "admin" || user.role === "superadmin")) ||
+                            (role === "superadmin" && user.role === "superadmin")
+                          }
                           className={`px-3 py-1 rounded-lg text-xs transition-colors ${
-                            user.is_blocked ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-red-100 text-red-700 hover:bg-red-200"
+                            ((role === "admin" && (user.role === "admin" || user.role === "superadmin")) ||
+                             (role === "superadmin" && user.role === "superadmin"))
+                              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              : user.is_blocked
+                              ? "bg-green-100 text-green-700 hover:bg-green-200"
+                              : "bg-red-100 text-red-700 hover:bg-red-200"
                           }`}
+                          title={
+                            role === "admin" && (user.role === "admin" || user.role === "superadmin")
+                              ? "Admins can only block/unblock customer or reseller accounts"
+                              : role === "superadmin" && user.role === "superadmin"
+                              ? "Superadmin cannot block/unblock other superadmin accounts"
+                              : user.is_blocked
+                              ? "Unblock user"
+                              : "Block user"
+                          }
                         >
                           {user.is_blocked ? "Unblock" : "Block"}
                         </button>

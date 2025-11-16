@@ -39,6 +39,29 @@ class UserViewSet(ModelViewSet):
         old_role = user.role
         requesting_user = request.user
 
+        # Blocking permission checks
+        if "is_blocked" in request.data:
+            # SUPERADMIN cannot block other SUPERADMIN
+            if requesting_user.role == "superadmin" and user.role == "superadmin":
+                return Response(
+                    {"detail": "Superadmin cannot block/unblock other superadmin accounts."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            # Only SUPERADMIN can block/unblock ADMIN
+            if requesting_user.role != "superadmin":
+                if user.role in ["superadmin", "admin"]:
+                    return Response(
+                        {"detail": "Only superadmin can block/unblock admin accounts."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            # ADMIN can only block/unblock CUSTOMER and RESELLER
+            if requesting_user.role == "admin":
+                if user.role in ["superadmin", "admin"]:
+                    return Response(
+                        {"detail": "Admins can only block/unblock customer or reseller accounts."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
         # Prevent changing role if user is superadmin
         if old_role == "superadmin" and "role" in request.data and request.data["role"] != "superadmin":
             return Response({"detail": "You cannot change the role of a superadmin."}, status=status.HTTP_403_FORBIDDEN)

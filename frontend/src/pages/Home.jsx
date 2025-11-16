@@ -2,7 +2,17 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import "../styles/Home.css";
-import { ChefHat, Star, MapPin, Phone, Mail, Clock, Leaf, Zap, Heart } from "lucide-react";
+import {
+  ChefHat,
+  Star,
+  MapPin,
+  Phone,
+  Mail,
+  Clock,
+  Leaf,
+  Zap,
+  Heart,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom"; // <-- Make sure this is imported
 import { fetchWithAuth } from "../utils/auth";
 import ScrollingTitle from "../components/ScrollingTitle";
@@ -13,8 +23,6 @@ import "aos/dist/aos.css";
 import { refreshToken } from "../utils/auth";
 import { useLocation } from "react-router-dom";
 
-
-
 const Home = () => {
   const [isVisible, setIsVisible] = useState(false);
   const location = useLocation();
@@ -22,21 +30,21 @@ const Home = () => {
   useEffect(() => {
     AOS.init({ once: true, duration: 1000, offset: 120 });
     setIsVisible(true);
-    
+
     // After animations complete, refresh AOS with once:true to ensure no re-triggers
     // Remove data-aos attributes to prevent any future animations
     const disableTimer = setTimeout(() => {
-      const elements = document.querySelectorAll('[data-aos]');
-      elements.forEach(el => {
+      const elements = document.querySelectorAll("[data-aos]");
+      elements.forEach((el) => {
         // Mark elements as already animated by removing the data-aos attribute
-        el.removeAttribute('data-aos');
+        el.removeAttribute("data-aos");
       });
       // Refresh AOS to clean up observers
       if (AOS.refresh) {
         AOS.refresh();
       }
     }, 2500);
-    
+
     return () => {
       clearTimeout(disableTimer);
     };
@@ -59,7 +67,7 @@ const Home = () => {
   // Add missing state and navigation
   const [role, setRole] = useState(null);
   const navigate = useNavigate(); // <-- ADD THIS LINE
-  
+
   // Get addToCart function - memoized cart context should prevent unnecessary re-renders
   const { addToCart } = useCart();
 
@@ -105,19 +113,22 @@ const Home = () => {
   const [toastMessage, setToastMessage] = useState("");
 
   // Handle adding products to cart - memoized to prevent re-renders
-  const handleAddToCart = useCallback(async (product) => {
-    console.log("Adding to cart:", product);
-    try {
-      await addToCart(product);
-      // Show floating toast notification instead of alert
-      setToastMessage(`${product.name} has been added to cart`);
-      setShowToast(true);
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      setToastMessage("Failed to add item to cart. Please try again.");
-      setShowToast(true);
-    }
-  }, [addToCart]);
+  const handleAddToCart = useCallback(
+    async (product) => {
+      console.log("Adding to cart:", product);
+      try {
+        await addToCart(product);
+        // Show floating toast notification instead of alert
+        setToastMessage(`${product.name} has been added to cart`);
+        setShowToast(true);
+      } catch (error) {
+        console.error("Error adding to cart:", error);
+        setToastMessage("Failed to add item to cart. Please try again.");
+        setShowToast(true);
+      }
+    },
+    [addToCart]
+  );
 
   // Dynamic products shown on homepage (only Active ones from inventory)
   const [products, setProducts] = useState([]);
@@ -128,12 +139,16 @@ const Home = () => {
     const loadProducts = async () => {
       try {
         setLoadingProducts(true);
-        const res = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/products/`);
+        const res = await fetchWithAuth(
+          `${import.meta.env.VITE_INVENTORY_URL}/products/`
+        );
         if (!res.ok) throw new Error("Failed to fetch products");
         const data = await res.json();
         if (!isMounted) return;
         const active = Array.isArray(data)
-          ? data.filter(p => (p && (p.status === 'Active' || p.status === 'active')))
+          ? data.filter(
+              (p) => p && (p.status === "Active" || p.status === "active")
+            )
           : [];
         setProducts(active);
       } catch {
@@ -143,7 +158,9 @@ const Home = () => {
       }
     };
     loadProducts();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Memoize products to prevent unnecessary re-renders
@@ -209,7 +226,11 @@ const Home = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div
-              className={`space-y-8 transition-all duration-1000 ${isVisible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-10"}`}
+              className={`space-y-8 transition-all duration-1000 ${
+                isVisible
+                  ? "opacity-100 translate-x-0"
+                  : "opacity-0 -translate-x-10"
+              }`}
             >
               <div className="space-y-4">
                 <div className="product-card-title-badge text-sm py-1 badge-cream-secondary badge-wide">
@@ -219,8 +240,9 @@ const Home = () => {
                   Jebran <span className="text-primary-custom">Miki</span>
                 </h1>
                 <p className="text-xl leading-relaxed max-w-lg text-secondary-custom">
-                  Where comfort meets flavor in every bowl. We deliver delicious, handcrafted noodles made with fresh
-                  ingredients and bold, unforgettable taste.
+                  Where comfort meets flavor in every bowl. We deliver
+                  delicious, handcrafted noodles made with fresh ingredients and
+                  bold, unforgettable taste.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4">
@@ -228,11 +250,11 @@ const Home = () => {
                   size="lg"
                   className="px-8 py-3 text-lg hover:opacity-90 bg-primary-custom text-white-custom CTA-width"
                   onClick={() => {
-                const productsSection = document.getElementById("products");
-                if (productsSection) {
-                  productsSection.scrollIntoView({ behavior: "smooth" });
-                }
-              }}
+                    const productsSection = document.getElementById("products");
+                    if (productsSection) {
+                      productsSection.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }}
                 >
                   Explore Our Products
                 </Button>
@@ -251,35 +273,42 @@ const Home = () => {
                 </Button>
               </div>
               <div className="flex items-center space-x-6 pt-4">
-                <div className="flex items-center space-x-1">
+                {/* <div className="flex items-center space-x-1">
                   {[...Array(5)].map((_, i) => (
                     <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                   ))}
                   <span className="ml-2 text-sm text-secondary-custom">
                     4.9 (2,000+ reviews)
                   </span>
-                </div>
+                </div> */}
               </div>
             </div>
             <div
-              className={`relative transition-all duration-1000 delay-300 ${isVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-10"}`}
+              className={`relative transition-all duration-1000 delay-300 ${
+                isVisible
+                  ? "opacity-100 translate-x-0"
+                  : "opacity-0 translate-x-10"
+              }`}
             >
-              <div className="relative" >
+              <div className="relative">
                 <img
-                  src="/delicious-noodle-bowl-with-colorful-ingredients.jpg"                  
+                  src="/delicious-noodle-bowl-with-colorful-ingredients.jpg"
                   alt="Delicious noodle bowl"
-                  className="w-full h-[600px] object-cover rounded-3xl shadow-2xl" data-aos="fade-left"
+                  className="w-full h-[600px] object-cover rounded-3xl shadow-2xl"
+                  data-aos="fade-left"
                 />
                 <div
-                  className="absolute -bottom-6 -left-6 rounded-2xl p-6 shadow-lg border bg-white-custom border-cream-custom" data-aos="fade-up"
+                  className="absolute -bottom-6 -left-6 rounded-2xl p-6 shadow-lg border bg-white-custom border-cream-custom"
+                  data-aos="fade-up"
                 >
-                  <div className="flex items-center space-x-3" data-aos="fade-up">
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center bg-primary-custom"
-                    >
+                  <div
+                    className="flex items-center space-x-3"
+                    data-aos="fade-up"
+                  >
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center bg-primary-custom">
                       <ChefHat className="h-6 w-6 text-white-custom" />
                     </div>
-                    <div >
+                    <div>
                       <p className="font-semibold text-dark-custom">
                         15+ Years
                       </p>
@@ -296,9 +325,13 @@ const Home = () => {
       </section>
 
       {/* Menu Section */}
-      <section id="products" className="py-20 bg-cream-50" >
-      <ScrollingTitle text="Specialties" repetitions={2000} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" data-aos="fade-up" data-aos-once="true">
+      <section id="products" className="py-20 bg-cream-50">
+        <ScrollingTitle text="Specialties" repetitions={2000} />
+        <div
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+          data-aos="fade-up"
+          data-aos-once="true"
+        >
           <div className="text-center mb-16">
             {/* <Badge
               variant="secondary"
@@ -310,70 +343,93 @@ const Home = () => {
               Signature <span className="text-primary-custom">Noodles</span>
             </h2>
             <p className="text-xl max-w-3xl mx-auto text-secondary-custom">
-              Each noodle is crafted with passion, using traditional recipes and the freshest ingredients
+              Each noodle is crafted with passion, using traditional recipes and
+              the freshest ingredients
             </p>
           </div>
 
           <div className="flex flex-col gap-8 items-center">
             {loadingProducts && (
-              <div className="w-full text-center text-secondary-custom">Loading products...</div>
+              <div className="w-full text-center text-secondary-custom">
+                Loading products...
+              </div>
             )}
             {!loadingProducts && memoizedProducts.length === 0 && (
-              <div className="w-full text-center text-secondary-custom">No active products available.</div>
+              <div className="w-full text-center text-secondary-custom">
+                No active products available.
+              </div>
             )}
-            {!loadingProducts && memoizedProducts.map((product, index) => {
-              const imageSrc = product.image
-                ? (product.image.startsWith('http') ? product.image : `${import.meta.env.VITE_INVENTORY_URL}${product.image}`)
-                : '/delicious-noodle-bowl-with-colorful-ingredients.jpg';
-              const fadeDir = index % 2 === 0 ? 'fade-left' : 'fade-right';
-              const priceText = (product.price !== null && product.price !== undefined && `${Number(product.price)}` !== 'NaN')
-                ? `₱${Number(product.price).toFixed(2)}`
-                : '—';
-              return (
-                <Card key={product.id} 
-                  className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border card-surface-white border-cream-custom menu-card flex flex-col md:flex-row overflow-hidden items-stretch"
-                >
-                  <div className="relative overflow-hidden md:w-1/2">
-                    <img
-                      src={imageSrc}
-                      alt={`${product.name} Image`}
-                      className="w-full menu-image group-hover:scale-105 transition-transform duration-300"
-                      onError={(e) => { e.currentTarget.src = '/delicious-noodle-bowl-with-colorful-ingredients.jpg'; }}
-                    />
-                  </div>
-                  <CardContent className="p-6 md:w-1/2">
-                    <h3 className="text-5xl font-heavy mb-4 mt-2 text-dark-custom buda-fs-mini">
-                      {product.name}
-                    </h3>
-                    <p className="mb-4 leading-relaxed text-secondary-custom">
-                      {product.description || 'Delicious noodles prepared fresh daily.'}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-heavy text-price-primary">
-                        {priceText}
-                      </span>
-                      <Button
-                        className={`hover:opacity-90 bg-primary-custom text-white-custom badge-simple ${role === 'admin' || role === 'superadmin' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        onClick={() => {
-                          if (!isLoggedIn) { navigate('/login'); return; }
-                          if (role !== 'admin' && role !== 'superadmin') handleAddToCart(product);
+            {!loadingProducts &&
+              memoizedProducts.map((product, index) => {
+                const imageSrc = product.image
+                  ? product.image.startsWith("http")
+                    ? product.image
+                    : `${import.meta.env.VITE_INVENTORY_URL}${product.image}`
+                  : "/delicious-noodle-bowl-with-colorful-ingredients.jpg";
+                const fadeDir = index % 2 === 0 ? "fade-left" : "fade-right";
+                const priceText =
+                  product.price !== null &&
+                  product.price !== undefined &&
+                  `${Number(product.price)}` !== "NaN"
+                    ? `₱${Number(product.price).toFixed(2)}`
+                    : "—";
+                return (
+                  <Card
+                    key={product.id}
+                    className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border card-surface-white border-cream-custom menu-card flex flex-col md:flex-row overflow-hidden items-stretch"
+                  >
+                    <div className="relative overflow-hidden md:w-1/2">
+                      <img
+                        src={imageSrc}
+                        alt={`${product.name} Image`}
+                        className="w-full menu-image group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          e.currentTarget.src =
+                            "/delicious-noodle-bowl-with-colorful-ingredients.jpg";
                         }}
-                        disabled={role === 'admin' || role === 'superadmin'}
-                        title={
-                          !isLoggedIn
-                            ? 'Login to place an order'
-                            : (role === 'admin' || role === 'superadmin')
-                              ? 'Ordering is disabled for admin accounts'
-                              : undefined
-                        }
-                      >
-                        Order Now
-                      </Button>
+                      />
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    <CardContent className="p-6 md:w-1/2">
+                      <h3 className="text-5xl font-heavy mb-4 mt-2 text-dark-custom buda-fs-mini">
+                        {product.name}
+                      </h3>
+                      <p className="mb-4 leading-relaxed text-secondary-custom">
+                        {product.description ||
+                          "Delicious noodles prepared fresh daily."}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-heavy text-price-primary">
+                          {priceText}
+                        </span>
+                        <Button
+                          className={`hover:opacity-90 bg-primary-custom text-white-custom badge-simple ${
+                            role === "admin" || role === "superadmin"
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            if (!isLoggedIn) {
+                              navigate("/login");
+                              return;
+                            }
+                            if (role !== "admin" && role !== "superadmin") handleAddToCart(product);
+                          }}
+                          disabled={role === "admin" || role === "superadmin"}
+                          title={
+                            !isLoggedIn
+                              ? "Login to place an order"
+                              : role === "admin" || role === "superadmin"
+                              ? "Ordering is disabled for admin accounts"
+                              : undefined
+                          }
+                        >
+                          Order Now
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
           </div>
         </div>
       </section>
@@ -382,14 +438,18 @@ const Home = () => {
       <section id="about" className="py-20 bg-white-custom" data-aos="fade-up">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <Badge
+            {/* <Badge
               variant="secondary"
               className="mb-4 badge-cream-secondary badge-simple"
             >
               Our Story
-            </Badge>
-            <h2 className="text-4xl lg:text-5xl font-heavy mb-6 text-dark-custom mt-8">
-              Crafting <span className="text-primary-custom buda-fs-mini">Authentic</span> Flavors
+            </Badge> */}
+            <h2 className="text-4xl lg:text-5xl font-heavy mb-6 text-dark-custom">
+              Crafting{" "}
+              <span className="text-primary-custom buda-fs-mini">
+                Authentic
+              </span>{" "}
+              Noodles
             </h2>
           </div>
 
@@ -415,9 +475,7 @@ const Home = () => {
               <div className="text-4xl lg:text-5xl font-bold mb-2 text-primary-custom">
                 100%
               </div>
-              <div className="text-lg text-secondary-custom">
-                Fresh Daily
-              </div>
+              <div className="text-lg text-secondary-custom">Fresh Daily</div>
             </div>
           </div>
 
@@ -428,13 +486,17 @@ const Home = () => {
                 className="w-16 h-16 rounded-full flex items-center justify-center mx-auto"
                 style={{ backgroundColor: `${colors.primary}20` }}
               >
-                <ChefHat className="h-8 w-8" style={{ color: colors.primary }} />
+                <ChefHat
+                  className="h-8 w-8"
+                  style={{ color: colors.primary }}
+                />
               </div>
               <h3 className="text-xl font-semibold text-dark-custom">
                 Authentic Recipes
               </h3>
               <p className="text-secondary-custom">
-                Traditional slow-simmered broths and time-tested recipes passed down through generations
+                Traditional slow-simmered broths and time-tested recipes passed
+                down through generations
               </p>
             </div>
             <div className="text-center space-y-4">
@@ -448,7 +510,8 @@ const Home = () => {
                 Fresh Daily
               </h3>
               <p className="text-secondary-custom">
-                Premium ingredients sourced locally and fresh noodles made daily in our kitchen
+                Premium ingredients sourced locally and fresh noodles made daily
+                in our kitchen
               </p>
             </div>
             <div className="text-center space-y-4">
@@ -462,7 +525,8 @@ const Home = () => {
                 Quick Service
               </h3>
               <p className="text-secondary-custom">
-                Fast, friendly service without compromising on quality or the care we put into every bowl
+                Fast, friendly service without compromising on quality or the
+                care we put into every bowl
               </p>
             </div>
             <div className="text-center space-y-4">
@@ -476,7 +540,8 @@ const Home = () => {
                 Made with Love
               </h3>
               <p className="text-secondary-custom">
-                Every bowl is crafted with passion, care, and dedication to bringing you comfort and joy
+                Every bowl is crafted with passion, care, and dedication to
+                bringing you comfort and joy
               </p>
             </div>
           </div>
@@ -484,20 +549,24 @@ const Home = () => {
       </section>
 
       {/* Contact Section */}
-      <section id="contact" className="py-20 bg-cream-50" >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" data-aos="fade-up">
+      <section id="contact" className="py-20 bg-cream-50">
+        <div
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+          data-aos="fade-up"
+        >
           <div className="text-center mb-16">
-            <Badge
+            {/* <Badge
               variant="secondary"
               className="mb-4 badge-cream-secondary badge-simple"
             >
               Get in Touch
-            </Badge>
-            <h2 className="text-4xl lg:text-5xl font-heavy mb-6 text-dark-custom mt-8">
+            </Badge> */}
+            <h2 className="text-4xl lg:text-5xl font-heavy mb-6 text-dark-custom">
               Visit <span className="text-primary-custom">Us</span>
             </h2>
             <p className="text-xl max-w-3xl mx-auto text-secondary-custom">
-              Have questions about our noodles or want to place a special order? We'd love to hear from you!
+              Have questions about our noodles or want to place a special order?
+              We'd love to hear from you!
             </p>
           </div>
 
@@ -505,9 +574,7 @@ const Home = () => {
             {/* Contact Information */}
             <div className="space-y-8">
               <div className="flex items-start space-x-4">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom"
-                >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom">
                   <MapPin className="h-6 w-6 text-white-custom" />
                 </div>
                 <div>
@@ -523,9 +590,7 @@ const Home = () => {
               </div>
 
               <div className="flex items-start space-x-4">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom"
-                >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom">
                   <Phone className="h-6 w-6 text-white-custom" />
                 </div>
                 <div>
@@ -540,9 +605,7 @@ const Home = () => {
               </div>
 
               <div className="flex items-start space-x-4">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom"
-                >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom">
                   <Mail className="h-6 w-6 text-white-custom" />
                 </div>
                 <div>
@@ -557,9 +620,7 @@ const Home = () => {
               </div>
 
               <div className="flex items-start space-x-4">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom"
-                >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-primary-custom">
                   <Clock className="h-6 w-6 text-white-custom" />
                 </div>
                 <div>
@@ -583,7 +644,10 @@ const Home = () => {
                 <form className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="name" className="block text-sm font-medium mb-2 text-dark-custom">
+                      <label
+                        htmlFor="name"
+                        className="block text-sm font-medium mb-2 text-dark-custom"
+                      >
                         Name
                       </label>
                       <input
@@ -594,7 +658,10 @@ const Home = () => {
                       />
                     </div>
                     <div>
-                      <label htmlFor="email" className="block text-sm font-medium mb-2 text-dark-custom">
+                      <label
+                        htmlFor="email"
+                        className="block text-sm font-medium mb-2 text-dark-custom"
+                      >
                         Email
                       </label>
                       <input
@@ -606,7 +673,10 @@ const Home = () => {
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="subject" className="block text-sm font-medium mb-2 text-dark-custom">
+                    <label
+                      htmlFor="subject"
+                      className="block text-sm font-medium mb-2 text-dark-custom"
+                    >
                       Subject
                     </label>
                     <input
@@ -617,7 +687,10 @@ const Home = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="message" className="block text-sm font-medium mb-2 text-dark-custom">
+                    <label
+                      htmlFor="message"
+                      className="block text-sm font-medium mb-2 text-dark-custom"
+                    >
                       Message
                     </label>
                     <textarea
@@ -627,9 +700,7 @@ const Home = () => {
                       placeholder="Tell us more about your inquiry..."
                     />
                   </div>
-                  <Button
-                    className="w-full py-3 text-lg hover:opacity-90 bg-primary-custom text-white-custom"
-                  >
+                  <Button className="w-full py-3 text-lg hover:opacity-90 bg-primary-custom text-white-custom">
                     Send Message
                   </Button>
                 </form>
@@ -645,11 +716,15 @@ const Home = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
-                <ChefHat className="h-8 w-8" style={{ color: colors.primary }} />
+                <ChefHat
+                  className="h-8 w-8"
+                  style={{ color: colors.primary }}
+                />
                 <span className="text-2xl font-bold">Jebran Miki</span>
               </div>
               <p className="text-white-cc">
-                Bringing you the finest noodles with authentic flavors and fresh ingredients.
+                Bringing you the finest noodles with authentic flavors and fresh
+                ingredients.
               </p>
             </div>
             <div>
@@ -657,12 +732,12 @@ const Home = () => {
               <ul className="space-y-2">
                 <li>
                   <button
-                               onClick={() => {
-                const productsSection = document.getElementById("home");
-                if (productsSection) {
-                  productsSection.scrollIntoView({ behavior: "smooth" });
-                }
-              }}
+                    onClick={() => {
+                      const productsSection = document.getElementById("home");
+                      if (productsSection) {
+                        productsSection.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
                     className="transition-colors hover:opacity-80 text-white-cc"
                   >
                     Home
@@ -670,36 +745,40 @@ const Home = () => {
                 </li>
                 <li>
                   <button
-              onClick={() => {
-                const productsSection = document.getElementById("products");
-                if (productsSection) {
-                  productsSection.scrollIntoView({ behavior: "smooth" });
-                }
-              }}                    className="transition-colors hover:opacity-80 text-white-cc"
+                    onClick={() => {
+                      const productsSection =
+                        document.getElementById("products");
+                      if (productsSection) {
+                        productsSection.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
+                    className="transition-colors hover:opacity-80 text-white-cc"
                   >
                     Products
                   </button>
                 </li>
                 <li>
                   <button
-              onClick={() => {
-                const productsSection = document.getElementById("about");
-                if (productsSection) {
-                  productsSection.scrollIntoView({ behavior: "smooth" });
-                }
-              }}                    className="transition-colors hover:opacity-80 text-white-cc"
+                    onClick={() => {
+                      const productsSection = document.getElementById("about");
+                      if (productsSection) {
+                        productsSection.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
+                    className="transition-colors hover:opacity-80 text-white-cc"
                   >
                     About
                   </button>
                 </li>
                 <li>
                   <button
-                                  onClick={() => {
-                const productsSection = document.getElementById("contact");
-                if (productsSection) {
-                  productsSection.scrollIntoView({ behavior: "smooth" });
-                }
-              }}
+                    onClick={() => {
+                      const productsSection =
+                        document.getElementById("contact");
+                      if (productsSection) {
+                        productsSection.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
                     className="transition-colors hover:opacity-80 text-white-cc"
                   >
                     Contact
@@ -718,32 +797,22 @@ const Home = () => {
             <div>
               <h4 className="text-lg font-semibold mb-4">Follow Us</h4>
               <div className="flex space-x-4">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 bg-primary-custom"
-                >
-                  <span className="font-bold text-white-custom">
-                    f
-                  </span>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 bg-primary-custom">
+                  <span className="font-bold text-white-custom">f</span>
                 </div>
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 bg-primary-custom"
-                >
-                  <span className="font-bold text-white-custom">
-                    @
-                  </span>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 bg-primary-custom">
+                  <span className="font-bold text-white-custom">@</span>
                 </div>
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 bg-primary-custom"
-                >
-                  <span className="font-bold text-white-custom">
-                    in
-                  </span>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 bg-primary-custom">
+                  <span className="font-bold text-white-custom">in</span>
                 </div>
               </div>
             </div>
           </div>
           <div className="border-t mt-8 pt-8 text-center border-white-33">
-            <p className="text-white-99">&copy; 2025 Jebran Miki. All rights reserved.</p>
+            <p className="text-white-99">
+              &copy; 2025 Jebran Miki. All rights reserved.
+            </p>
           </div>
         </div>
       </footer>
@@ -756,7 +825,7 @@ const Home = () => {
         duration={3000}
       />
     </div>
-  )
-}
+  );
+};
 
 export default Home;

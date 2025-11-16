@@ -241,25 +241,6 @@ const Cart = () => {
                   </div>
                 </div>
 
-                {/* Promo Code */}
-                <div className="promo-code-card">
-                  <div className="promo-code-header">
-                    <h3 className="promo-code-title">Promo Code</h3>
-                    <p className="promo-code-description">Have a discount code? Apply it here</p>
-                  </div>
-                  <div className="promo-code-content">
-                    <div className="promo-code-input-group">
-                      <input
-                        type="text"
-                        placeholder="Enter promo code"
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
-                        className="promo-code-input"
-                      />
-                      <button className="apply-promo-btn">Apply</button>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
           </div>
@@ -304,24 +285,7 @@ const Cart = () => {
                 </button>
 
                 <div className="order-summary-features">
-                  <div className="feature-item">
-                    <svg className="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20,6 9,17 4,12"/>
-                    </svg>
-                    <span>Free delivery on orders over ₱500</span>
-                  </div>
-                  <div className="feature-item">
-                    <svg className="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20,6 9,17 4,12"/>
-                    </svg>
-                    <span>Secure payment processing</span>
-                  </div>
-                  <div className="feature-item">
-                    <svg className="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20,6 9,17 4,12"/>
-                    </svg>
-                    <span>Fresh ingredients guaranteed</span>
-                  </div>
+
                 </div>
               </div>
             </div>

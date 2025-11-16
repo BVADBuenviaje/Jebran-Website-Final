@@ -8,7 +8,9 @@ const ResupplyOrders = () => {
   const [loadingRole, setLoadingRole] = useState(true);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState(["Pending", "Partial", "Delivered", "Canceled"]);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   // receiveInputs: { [orderItemId]: { amount: "", expiry: "", loading: false, error: "" } }
@@ -279,6 +281,21 @@ const ResupplyOrders = () => {
     }
   };
 
+  const handleStatusToggle = (status) => {
+    setStatusFilter(prev => {
+      if (prev.includes(status)) {
+        return prev.filter(s => s !== status);
+      } else {
+        return [...prev, status];
+      }
+    });
+  };
+
+  const clearDateFilters = () => {
+    setDateFrom("");
+    setDateTo("");
+  };
+
   if (loadingRole || loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -296,10 +313,36 @@ const ResupplyOrders = () => {
 
   const filteredOrders = orders.filter(order => {
     const statusText = computeOrderStatus(order);
-    const matchesStatus = statusFilter === "All" || statusText === statusFilter;
+    const matchesStatus = statusFilter.length === 0 || statusFilter.includes(statusText);
+    
     const matchesSearch = order.supplier_detail?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (order.items || []).some(item => (item.ingredient_detail?.name ?? "").toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesStatus && matchesSearch;
+    
+    // Date range filter
+    let matchesDateRange = true;
+    if (dateFrom || dateTo) {
+      const orderDate = order.order_date ? new Date(order.order_date) : null;
+      if (!orderDate) {
+        matchesDateRange = false;
+      } else {
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          if (orderDate < fromDate) {
+            matchesDateRange = false;
+          }
+        }
+        if (dateTo && matchesDateRange) {
+          const toDate = new Date(dateTo);
+          toDate.setHours(23, 59, 59, 999);
+          if (orderDate > toDate) {
+            matchesDateRange = false;
+          }
+        }
+      }
+    }
+    
+    return matchesStatus && matchesSearch && matchesDateRange;
   });
 
   const totalOrders = orders.length;
@@ -350,19 +393,63 @@ const ResupplyOrders = () => {
           </div>
 
           <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1 max-w-md">
-                <div className="relative">
-                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input type="text" placeholder="Search by supplier or ingredient..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f08b51] focus:border-transparent" />
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 max-w-md">
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input type="text" placeholder="Search by supplier or ingredient..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f08b51] focus:border-transparent" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {["Pending", "Partial", "Delivered", "Canceled"].map(status => (
+                    <button 
+                      key={status} 
+                      onClick={() => handleStatusToggle(status)} 
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        statusFilter.includes(status) 
+                          ? "bg-[#f08b51] text-white" 
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {["All", "Pending", "Partial", "Delivered", "Canceled"].map(status => (
-                  <button key={status} onClick={() => setStatusFilter(status)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statusFilter === status ? "bg-[#f08b51] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{status}</button>
-                ))}
+              
+              {/* Date Range Filter */}
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                  Date Range:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    placeholder="From"
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
+                  />
+                  <span className="text-gray-500">to</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    placeholder="To"
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
+                  />
+                  {(dateFrom || dateTo) && (
+                    <button
+                      onClick={clearDateFilters}
+                      className="text-sm text-[#f08b51] hover:text-[#d9734a] underline whitespace-nowrap"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

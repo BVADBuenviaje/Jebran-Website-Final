@@ -16,6 +16,7 @@ const SupplierDashboard = () => {
   const [orderBy, setOrderBy] = useState("alphabetical");
   const [search, setSearch] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState(["active", "blocked"]);
+  const [selectedIngredient, setSelectedIngredient] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [role, setRole] = useState(null);
@@ -174,7 +175,26 @@ const SupplierDashboard = () => {
       (s.name && s.name.toLowerCase().includes(q)) ||
       (s.email && s.email.toLowerCase().includes(q)) ||
       (s.address && s.address.toLowerCase().includes(q));
-    return matchesStatus && matchesSearch;
+    
+    // Filter by ingredient supplied
+    let matchesIngredient = true;
+    if (selectedIngredient) {
+      const supplierIngredientIds = new Set();
+      // Extract ingredient IDs from ingredients_supplied
+      if (s.ingredients_supplied && Array.isArray(s.ingredients_supplied)) {
+        s.ingredients_supplied.forEach(item => {
+          const ing = item.ingredient ?? item.ingredient_detail ?? {};
+          const ingId = ing.id ?? item.ingredient_id ?? item.ingredient;
+          if (ingId != null) {
+            supplierIngredientIds.add(String(ingId));
+          }
+        });
+      }
+      // Check if supplier supplies the selected ingredient
+      matchesIngredient = supplierIngredientIds.has(String(selectedIngredient));
+    }
+    
+    return matchesStatus && matchesSearch && matchesIngredient;
   });
 
   if (orderBy === "alphabetical") {
@@ -239,6 +259,10 @@ const SupplierDashboard = () => {
 
   const handleStatusChange = (status) => {
     setSelectedStatuses(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]);
+  };
+
+  const clearIngredientFilter = () => {
+    setSelectedIngredient("");
   };
 
   const handleAddSupplier = async (form) => {
@@ -436,23 +460,57 @@ const SupplierDashboard = () => {
           </div>
 
           <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1 max-w-md">
-                <div className="relative">
-                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="Search suppliers..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
-                  />
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 max-w-md">
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search suppliers..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusCheckboxes selectedStatuses={selectedStatuses} onChange={handleStatusChange} />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <StatusCheckboxes selectedStatuses={selectedStatuses} onChange={handleStatusChange} />
+              
+              {/* Ingredient Filter */}
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                  Filter by Ingredient:
+                </label>
+                <div className="flex-1 max-w-md flex items-center gap-2">
+                  <select
+                    value={selectedIngredient}
+                    onChange={(e) => setSelectedIngredient(e.target.value)}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#f08b51] focus:border-transparent"
+                  >
+                    <option value="">All Ingredients</option>
+                    {allIngredients
+                      .filter(i => i.is_active)
+                      .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                      .map(ingredient => (
+                        <option key={ingredient.id} value={ingredient.id}>
+                          {ingredient.name || `Ingredient #${ingredient.id}`}
+                        </option>
+                      ))}
+                  </select>
+                  {selectedIngredient && (
+                    <button
+                      onClick={clearIngredientFilter}
+                      className="text-sm text-[#f08b51] hover:text-[#d9734a] underline whitespace-nowrap"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

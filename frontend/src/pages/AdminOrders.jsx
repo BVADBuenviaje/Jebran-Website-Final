@@ -26,6 +26,9 @@ function getStatusBadgeClasses(status) {
 export default function AdminOrders() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orders, setOrders] = useState(FALLBACK_ORDERS);
   const [, setLoading] = useState(true);
@@ -78,9 +81,35 @@ export default function AdminOrders() {
         order.customer.name.toLowerCase().includes(search) ||
         order.customer.email.toLowerCase().includes(search);
       const matchesStatus = statusFilter === "all" || order.status.toLowerCase() === statusFilter.toLowerCase();
-      return matchesSearch && matchesStatus;
+      const matchesPaymentStatus = paymentStatusFilter === "all" || order.payment_status.toLowerCase() === paymentStatusFilter.toLowerCase();
+      
+      // Date range filter
+      let matchesDateRange = true;
+      if (dateFrom || dateTo) {
+        const orderDate = order.date ? new Date(order.date) : null;
+        if (!orderDate || isNaN(orderDate.getTime())) {
+          matchesDateRange = false;
+        } else {
+          if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            fromDate.setHours(0, 0, 0, 0);
+            if (orderDate < fromDate) {
+              matchesDateRange = false;
+            }
+          }
+          if (dateTo && matchesDateRange) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999);
+            if (orderDate > toDate) {
+              matchesDateRange = false;
+            }
+          }
+        }
+      }
+      
+      return matchesSearch && matchesStatus && matchesPaymentStatus && matchesDateRange;
     });
-  }, [searchTerm, statusFilter, orders]);
+  }, [searchTerm, statusFilter, paymentStatusFilter, dateFrom, dateTo, orders]);
 
   const totalOrders = orders.length;
   const pendingOrders = orders.filter((o) => o.status === "Pending" || o.status === "Processing").length;
@@ -177,10 +206,6 @@ export default function AdminOrders() {
     }
   };
 
-  // Helper to determine if we can "unmark" delivered or paid
-  const canUnmarkDelivered = (order) => order.status === "Delivered";
-  const canUnmarkPaid = (order) => order.payment_status === "Paid";
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -234,28 +259,75 @@ export default function AdminOrders() {
           </div>
           <div className="p-5">
             {/* Search & Filter */}
-            <div className="flex items-center gap-4 mb-6">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search orders or customers..."
-                  className="w-full pl-10 pr-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm"
-                />
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search orders or customers..."
+                    className="w-full pl-10 pr-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm"
+                  />
+                </div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-44 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <select
+                  value={paymentStatusFilter}
+                  onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                  className="w-44 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="all">All Payment Status</option>
+                  <option value="paid">Paid</option>
+                  <option value="unpaid">Unpaid</option>
+                  <option value="pending">Payment Pending</option>
+                </select>
               </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-44 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="shipped">Shipped</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              
+              {/* Date Range Filter */}
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                  Date Range:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    placeholder="From"
+                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 text-sm"
+                  />
+                  <span className="text-gray-500">to</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    placeholder="To"
+                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 text-sm"
+                  />
+                  {(dateFrom || dateTo) && (
+                    <button
+                      onClick={() => {
+                        setDateFrom("");
+                        setDateTo("");
+                      }}
+                      className="text-sm text-gray-600 hover:text-gray-800 underline whitespace-nowrap"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Table */}
