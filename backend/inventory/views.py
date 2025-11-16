@@ -72,6 +72,26 @@ from django.db import transaction
 from django.db.models import Sum, Count
 logger = logging.getLogger(__name__)
 
+
+def append_sale_audit_log(sale, old_status, new_status, user):
+    """
+    Append audit log entry to sale notes field.
+    Clean, concise format: [Date Time] OldStatus → NewStatus (User)
+    Each entry is on a new line for readability.
+    """
+    timestamp = timezone.now().strftime("%m/%d %H:%M")
+    username = user.username if user else "System"
+    log_entry = f"[{timestamp}] {old_status} → {new_status} ({username})"
+    
+    # Append to existing notes, preserving original content
+    # Ensure each entry is on a new line
+    existing_notes = sale.notes or ""
+    if existing_notes:
+        sale.notes = existing_notes + "\n" + log_entry
+    else:
+        sale.notes = log_entry
+    sale.save(update_fields=["notes"])
+
 class IngredientViewSet(viewsets.ModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
@@ -360,44 +380,66 @@ class OrderViewSet(viewsets.ModelViewSet):
             self.perform_update(serializer)
             return Response(serializer.data)
 
+        # Track payment_status changes for sale record management
+        old_payment_status = instance.payment_status
+        new_payment_status = data.get('payment_status', old_payment_status)
+
         # Admins can update status freely (other fields are typically managed by system)
         serializer = self.get_serializer(instance, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=["post"], url_path="status")
-    def set_status(self, request, pk=None):
-        instance = self.get_object()
-        new_status = request.data.get("status")
         
-        # Handle payment status updates (Paid, Unpaid, etc.)
-        if new_status in dict(PAYMENT_STATUS_CHOICES):
-            user = request.user
-            if not (user.is_staff or instance.user == user):
-                return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
-            
-            instance.payment_status = new_status
-            instance.save(update_fields=["payment_status"])
-            
-            # Create Sale when payment becomes Paid and sale doesn't exist
-            if new_status == "Paid":
+        # Refresh instance to get updated values
+        instance.refresh_from_db()
+        
+        # Handle sale record creation/updates when payment status changes
+        with transaction.atomic():
+            # If payment status changed to "Paid", create sale if it doesn't exist
+            if new_payment_status == "Paid" and old_payment_status != "Paid":
                 if not hasattr(instance, "sale"):
-                    sale = Sale.objects.create(
+                    initial_notes = "Payment confirmed via admin interface"
+                    if instance.payment_method == "COD":
+                        initial_notes = "COD payment confirmed via admin interface"
+                    Sale.objects.create(
                         order=instance,
                         total_paid=instance.total_price,
                         payment_method=instance.payment_method,
                         payment_status=instance.payment_status,
                         payment_reference=instance.payment_reference or "",
                         handled_by=user if user.is_staff else None,
-                        notes="Payment confirmed via GCash" if instance.payment_method == "GCash" else "Payment confirmed via admin interface"
+                        notes=initial_notes
                     )
+                else:
+                    # Update existing sale to Paid with audit log
+                    sale = instance.sale
+                    old_sale_status = sale.payment_status
+                    sale.payment_status = "Paid"
+                    sale.save(update_fields=["payment_status"])
+                    if old_sale_status != "Paid":
+                        append_sale_audit_log(sale, old_sale_status, "Paid", user)
             
-            serializer = self.get_serializer(instance)
-            return Response(serializer.data)
+            # If payment status changed to "Unpaid", update related sale record if it exists
+            elif new_payment_status == "Unpaid" and old_payment_status != "Unpaid":
+                if hasattr(instance, "sale"):
+                    sale = instance.sale
+                    old_sale_status = sale.payment_status
+                    sale.payment_status = "Unpaid"
+                    sale.save(update_fields=["payment_status"])
+                    if old_sale_status != "Unpaid":
+                        append_sale_audit_log(sale, old_sale_status, "Unpaid", user)
         
-        # Handle order status updates (Pending, Delivered, etc.)
-        elif new_status in dict(Order.STATUS_CHOICES):
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="status")
+    def set_status(self, request, pk=None):
+        instance = self.get_object()
+        new_status = request.data.get("status")
+        status_type = request.data.get("type", "order")  # "order" or "payment" to disambiguate
+        
+        # Prioritize order status if it's a valid order status (to avoid confusion with "Pending" which exists in both)
+        # Only treat as payment status if explicitly specified as "payment" type AND it's a valid payment status
+        if new_status in dict(Order.STATUS_CHOICES) and status_type != "payment":
+            # Handle order status updates (Pending, Delivered, etc.)
             user = request.user
             if getattr(user, 'role', None) not in ['admin', 'superadmin']:
                 # Non-admins can only cancel their own pending orders
@@ -406,6 +448,55 @@ class OrderViewSet(viewsets.ModelViewSet):
 
             instance.status = new_status
             instance.save(update_fields=["status"])
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data)
+        
+        # Handle payment status updates (Paid, Unpaid, etc.)
+        elif new_status in dict(PAYMENT_STATUS_CHOICES) and (status_type == "payment" or new_status not in dict(Order.STATUS_CHOICES)):
+            user = request.user
+            if not (user.is_staff or instance.user == user):
+                return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+            
+            old_payment_status = instance.payment_status
+            instance.payment_status = new_status
+            instance.save(update_fields=["payment_status"])
+            
+            # Handle sale record creation/updates
+            with transaction.atomic():
+                # Create Sale when payment becomes Paid and sale doesn't exist
+                if new_status == "Paid" and old_payment_status != "Paid":
+                    if not hasattr(instance, "sale"):
+                        initial_notes = "Payment confirmed via admin interface"
+                        if instance.payment_method == "GCash":
+                            initial_notes = "Payment confirmed via GCash"
+                        sale = Sale.objects.create(
+                            order=instance,
+                            total_paid=instance.total_price,
+                            payment_method=instance.payment_method,
+                            payment_status=instance.payment_status,
+                            payment_reference=instance.payment_reference or "",
+                            handled_by=user if user.is_staff else None,
+                            notes=initial_notes
+                        )
+                    else:
+                        # Update existing sale to Paid with audit log
+                        sale = instance.sale
+                        old_sale_status = sale.payment_status
+                        sale.payment_status = "Paid"
+                        sale.save(update_fields=["payment_status"])
+                        if old_sale_status != "Paid":
+                            append_sale_audit_log(sale, old_sale_status, "Paid", user)
+                
+                # If payment status changed to "Unpaid", update related sale record if it exists
+                elif new_status == "Unpaid" and old_payment_status != "Unpaid":
+                    if hasattr(instance, "sale"):
+                        sale = instance.sale
+                        old_sale_status = sale.payment_status
+                        sale.payment_status = "Unpaid"
+                        sale.save(update_fields=["payment_status"])
+                        if old_sale_status != "Unpaid":
+                            append_sale_audit_log(sale, old_sale_status, "Unpaid", user)
+            
             serializer = self.get_serializer(instance)
             return Response(serializer.data)
         
@@ -525,6 +616,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         data = serializer.validated_data
 
         with transaction.atomic():
+            old_payment_status = order.payment_status
             order.payment_method = data["payment_method"]
             order.payment_status = data["payment_status"]
             order.payment_reference = data.get("payment_reference", "") or ""
@@ -534,6 +626,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             if order.payment_status == "Paid":
                 # Only create sale if not already present
                 if not hasattr(order, "sale"):
+                    initial_notes = data.get("notes", "") or "Payment confirmed via admin interface"
                     sale = Sale.objects.create(
                         order=order,
                         total_paid=getattr(order, "total_price", 0) or 0,
@@ -541,15 +634,32 @@ class OrderViewSet(viewsets.ModelViewSet):
                         payment_status=order.payment_status,
                         payment_reference=order.payment_reference or "",
                         handled_by=request.user if request.user.is_staff else None,
-                        notes=data.get("notes", "")
+                        notes=initial_notes
                     )
                 else:
                     # Update existing sale status/reference if necessary
                     sale = order.sale
+                    old_sale_status = sale.payment_status
                     sale.payment_status = order.payment_status
                     sale.payment_reference = order.payment_reference or ""
-                    sale.notes = (sale.notes or "") + ("\n" + (data.get("notes") or "")) if data.get("notes") else sale.notes
+                    # Append custom notes if provided
+                    if data.get("notes"):
+                        existing_notes = sale.notes or ""
+                        sale.notes = (existing_notes + "\n" + data.get("notes")).strip()
                     sale.save()
+                    # Add audit log if status changed
+                    if old_sale_status != order.payment_status:
+                        append_sale_audit_log(sale, old_sale_status, order.payment_status, request.user)
+            
+            # If payment status changed to "Unpaid", update related sale record if it exists
+            elif order.payment_status == "Unpaid" and old_payment_status != "Unpaid":
+                if hasattr(order, "sale"):
+                    sale = order.sale
+                    old_sale_status = sale.payment_status
+                    sale.payment_status = "Unpaid"
+                    sale.save(update_fields=["payment_status"])
+                    if old_sale_status != "Unpaid":
+                        append_sale_audit_log(sale, old_sale_status, "Unpaid", request.user)
 
         return Response({"detail": "Payment updated", "order_id": order.id}, status=status.HTTP_200_OK)
     
@@ -934,13 +1044,17 @@ class SalesViewSet(viewsets.ReadOnlyModelViewSet):
     def summary(self, request):
         """
         Returns comprehensive sales summary for the last X days (default 7)
+        Only counts sales with payment_status='Paid' for revenue calculations
         """
         days = int(request.query_params.get("days", 7))
         since = timezone.now() - timedelta(days=days)
+        # Filter by date and only count Paid sales for revenue
         qs = Sale.objects.filter(payment_date__gte=since)
+        qs_paid = qs.filter(payment_status="Paid")
 
-        totals = qs.aggregate(total_revenue=Sum("total_paid"), total_sales=Count("id"))
-        by_method = qs.values("payment_method").annotate(
+        # Revenue calculations only include Paid sales
+        totals = qs_paid.aggregate(total_revenue=Sum("total_paid"), total_sales=Count("id"))
+        by_method = qs_paid.values("payment_method").annotate(
             count=Count("id"),
             revenue=Sum("total_paid")
         )
@@ -957,10 +1071,12 @@ class SalesViewSet(viewsets.ReadOnlyModelViewSet):
     def analytics(self, request):
         """
         Returns various analytics metrics for sales.
+        Only counts sales with payment_status='Paid' for revenue calculations
         """
         days = int(request.query_params.get("days", 30))
         since = timezone.now() - timedelta(days=days)
-        qs = Sale.objects.filter(payment_date__gte=since)
+        # Only count Paid sales for revenue calculations
+        qs = Sale.objects.filter(payment_date__gte=since, payment_status="Paid")
         totals = qs.aggregate(total_revenue=Sum("total_paid"), total_sales=Count("id"))
         avg_sale = totals["total_revenue"] / totals["total_sales"] if totals["total_sales"] else 0
         return Response({
