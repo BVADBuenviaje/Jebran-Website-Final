@@ -67,7 +67,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <UserDashboard />;
   };
 
@@ -79,7 +79,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <SupplierDashboard />;
   };
 
@@ -91,7 +91,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <Ingredients />;
   };
 
@@ -103,7 +103,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <Products />;
   };
 
@@ -127,7 +127,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <AdminCart />;
   };
 
@@ -139,7 +139,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <AdminOrders />;
   };
 
@@ -151,7 +151,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <ResupplyOrders />;
   };
 
@@ -175,7 +175,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <SalesManagement />;
   };
 
@@ -187,7 +187,7 @@ function AppContent() {
         <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     );
-    if (role !== "admin") return <Navigate to="/" />;
+    if (role !== "admin" && role !== "superadmin") return <Navigate to="/" />;
     return <Production />;
   };
 

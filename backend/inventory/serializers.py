@@ -142,7 +142,12 @@ class ResupplyOrderItemSerializer(serializers.ModelSerializer):
 
     ingredient_detail = IngredientSerializer(source="ingredient", read_only=True)
     quantity_ordered = serializers.DecimalField(max_digits=12, decimal_places=3, required=False)
-    quantity_received = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    
+    quantity_received = serializers.SerializerMethodField()
+
+    def get_quantity_received(self, obj):
+        return obj.quantity_received
+        
     is_fully_received = serializers.BooleanField(read_only=True)
 
     class Meta:

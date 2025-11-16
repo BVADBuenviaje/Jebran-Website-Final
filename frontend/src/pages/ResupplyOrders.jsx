@@ -292,7 +292,7 @@ const ResupplyOrders = () => {
     );
   }
 
-  if (role !== "admin") return <Navigate to="/login" />;
+  if (role !== "admin" && role !== "superadmin") return <Navigate to="/login" />;
 
   const filteredOrders = orders.filter(order => {
     const statusText = computeOrderStatus(order);
@@ -403,7 +403,13 @@ const ResupplyOrders = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => toggleExpand(order.id)} className="px-3 py-1 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-xs mr-2">{expandedOrderId === order.id ? "Hide" : "Receive"}</button>
+                          <button
+                            onClick={() => toggleExpand(order.id)}
+                            disabled={computeOrderStatus(order) === "Canceled"}
+                            className={`px-3 py-1 border border-gray-300 rounded-lg text-gray-700 transition-colors text-xs mr-2 ${computeOrderStatus(order) === "Canceled" ? "bg-gray-200 cursor-not-allowed" : "hover:bg-gray-50"}`}
+                          >
+                            {expandedOrderId === order.id ? "Hide" : "Receive"}
+                          </button>
                           <button onClick={() => handleCancel(order.id)} disabled={computeOrderStatus(order) === "Canceled" || computeOrderStatus(order) === "Delivered"} className={`px-3 py-1 rounded text-sm text-white ${computeOrderStatus(order) === "Canceled" || computeOrderStatus(order) === "Delivered" ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"}`}>Cancel</button>
                         </div>
                       </td>

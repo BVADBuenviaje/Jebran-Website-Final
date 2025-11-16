@@ -360,7 +360,7 @@ const SupplierDashboard = () => {
     );
   }
 
-  if (role !== "admin") return <Navigate to="/login" />;
+  if (role !== "admin" && role !== "superadmin") return <Navigate to="/login" />;
 
   const totalSuppliers = suppliers.length;
   const activeSuppliers = suppliers.filter(s => s.is_active).length;

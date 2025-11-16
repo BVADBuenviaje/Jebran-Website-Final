@@ -231,6 +231,23 @@ class ResupplyOrderViewSet(viewsets.ModelViewSet):
         response = super().update(request, *args, **kwargs)
         instance.refresh_from_db()
 
+        if old_status != "Canceled" and new_status == "Canceled":
+            supplier_email = instance.supplier.email
+            item_lines = [
+                f"- {item.ingredient.name}: {getattr(item, 'quantity_ordered', 0)} {item.ingredient.unit_of_measurement}"
+                for item in instance.items.select_related("ingredient")
+            ]
+            subject = "Resupply Order Canceled"
+            message = (
+                f"Dear {instance.supplier.name},\n\n"
+                f"We regret to inform you that the following resupply order has been canceled:\n"
+                + "\n".join(item_lines) +
+                f"\n\nOrder ID: {instance.id}\nDate: {instance.order_date.strftime('%Y-%m-%d %H:%M')}\n\n"
+                "If you have any questions, please contact us.\n\n"
+                "Thank you!"
+            )
+            send_mail(subject, message, None, [supplier_email])
+
         if old_status != "Delivered" and new_status == "Delivered" and not was_delivered:
             for item in instance.items.select_related("ingredient"):
                 ordered = getattr(item, "quantity_ordered", None) or Decimal("0")
@@ -313,7 +330,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         user = self.request.user
         try:
             # If user has role attribute and is admin, return all orders
-            if getattr(user, 'role', None) == 'admin':
+            if getattr(user, 'role', None) in ['admin', 'superadmin']:
                 return Order.objects.all()
         except Exception:
             pass
@@ -326,7 +343,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
 
         # Only allow status change for non-admins, and only to Cancelled from Pending
-        if getattr(user, 'role', None) != 'admin':
+        if getattr(user, 'role', None) not in ['admin', 'superadmin']:
             # Limit updatable fields to 'status' only
             allowed = {}
             if 'status' in data:
@@ -382,7 +399,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         # Handle order status updates (Pending, Delivered, etc.)
         elif new_status in dict(Order.STATUS_CHOICES):
             user = request.user
-            if getattr(user, 'role', None) != 'admin':
+            if getattr(user, 'role', None) not in ['admin', 'superadmin']:
                 # Non-admins can only cancel their own pending orders
                 if new_status != 'Cancelled' or instance.status != 'Pending' or instance.user_id != user.id:
                     return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
@@ -1299,10 +1316,19 @@ class ProductionWindowConfigView(APIView):
         return Response(serializer.data)
 
 
-class IngredientBatchViewSet(viewsets.ReadOnlyModelViewSet):
+class IngredientBatchViewSet(viewsets.ModelViewSet):
     queryset = IngredientBatch.objects.select_related("ingredient", "order_item").all()
     serializer_class = IngredientBatchSerializer
     permission_classes = [IsAuthenticated]
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        response = super().update(request, *args, **kwargs)
+        instance.refresh_from_db()
+
+        # Update the related order item's received quantity if batch is linked
+
+        return response
 
 # Checkout Session API Endpoints
 class CreateCheckoutSessionAPIView(APIView):

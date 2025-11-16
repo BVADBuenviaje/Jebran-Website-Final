@@ -131,7 +131,7 @@ class ResupplyOrderItem(models.Model):
 
     @property
     def quantity_received(self):
-        agg = self.batches.aggregate(received=Sum('quantity_received'))
+        agg = self.batches.aggregate(received=Sum('current_quantity'))
         return Decimal(agg['received'] or 0)
 
     @property

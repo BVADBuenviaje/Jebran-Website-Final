@@ -353,16 +353,16 @@ const Home = () => {
                         {priceText}
                       </span>
                       <Button
-                        className={`hover:opacity-90 bg-primary-custom text-white-custom badge-simple ${role === 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`hover:opacity-90 bg-primary-custom text-white-custom badge-simple ${role === 'admin' || role === 'superadmin' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         onClick={() => {
                           if (!isLoggedIn) { navigate('/login'); return; }
-                          if (role !== 'admin') handleAddToCart(product);
+                          if (role !== 'admin' && role !== 'superadmin') handleAddToCart(product);
                         }}
-                        disabled={role === 'admin'}
+                        disabled={role === 'admin' || role === 'superadmin'}
                         title={
                           !isLoggedIn
                             ? 'Login to place an order'
-                            : role === 'admin'
+                            : (role === 'admin' || role === 'superadmin')
                               ? 'Ordering is disabled for admin accounts'
                               : undefined
                         }

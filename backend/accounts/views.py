@@ -3,6 +3,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.generics import ListAPIView
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
 from .serializers import UserSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -34,14 +35,57 @@ class UserViewSet(ModelViewSet):
     
     def update(self, request, *args, **kwargs):
         kwargs['partial'] = True
-        response = super().update(request, *args, **kwargs)
         user = self.get_object()
+        old_role = user.role
+        requesting_user = request.user
+
+        # Prevent changing role if user is superadmin
+        if old_role == "superadmin" and "role" in request.data and request.data["role"] != "superadmin":
+            return Response({"detail": "You cannot change the role of a superadmin."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Prevent superadmin from changing their own role
+        if requesting_user.id == user.id and user.role == "superadmin" and "role" in request.data:
+            return Response({"detail": "Superadmin cannot change their own role."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Admins cannot grant or remove admin privileges
+        if requesting_user.role == "admin":
+            if "role" in request.data:
+                # Only allow changing reseller/customer to reseller/customer
+                if old_role in ["reseller", "customer"] and request.data["role"] in ["reseller", "customer"]:
+                    pass  # allowed
+                elif request.data["role"] == "admin" or old_role == "admin":
+                    return Response({"detail": "Admins cannot grant or remove admin privileges."}, status=status.HTTP_403_FORBIDDEN)
+                else:
+                    return Response({"detail": "Invalid role change."}, status=status.HTTP_403_FORBIDDEN)
+
+        response = super().update(request, *args, **kwargs)
+        user.refresh_from_db()
+        # Staff sync logic
         if user.role == "admin" and not user.is_staff:
             user.is_staff = True
             user.save(update_fields=["is_staff"])
         elif user.role != "admin" and user.is_staff:
             user.is_staff = False
             user.save(update_fields=["is_staff"])
+        # Automated email when promoted from customer to reseller
+        if old_role == "customer" and user.role == "reseller":
+            subject = "Jebran Account Verified"
+            message = (
+                f"Congratulations, {user.full_name}! "
+                "Your Jebran account has been verified. You are now able to login and order from our shop. "
+                "Thank you for choosing Jebran as your local noodle supplier."
+            )
+            send_mail(subject, message, None, [user.email])
+        # Automated email when demoted to customer
+        if old_role == "reseller" and user.role == "customer":
+            subject = "Jebran Account Update"
+            message = (
+                f"Hello {user.full_name},\n\n"
+                "Your account has been changed to a customer account. You no longer have reseller privileges. "
+                "If you believe this is a mistake, please contact our support team.\n\n"
+                "Thank you for being part of the Jebran family."
+            )
+            send_mail(subject, message, None, [user.email])
         return response
     
     def retrieve(self, request, *args, **kwargs):

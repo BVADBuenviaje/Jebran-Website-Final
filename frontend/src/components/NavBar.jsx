@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import logo from "../assets/Logo.svg";
+import logo from "../assets/JebranLogo.png";
 import StickyHeadroom from "@integreat-app/react-sticky-headroom";
 import UserIcon from "../assets/user1.png";
 import ShoppingCartIcon from "../assets/cart.svg";
@@ -9,6 +9,9 @@ import "./NavBar.css";
 import AdminCartModal from "./AdminCartModal";
 
 export default function Navbar({ role, loadingRole }) {
+  const [openDropdown, setOpenDropdown] = useState(null); // Add this line
+  const dropdownRefs = useRef({}); // Add this line
+  const userDropdownRef = useRef(null); // Add this line
   const [showDropdown, setShowDropdown] = useState(false);
   const [showAdminCartModal, setShowAdminCartModal] = useState(false);
   const [localToken, setLocalToken] = useState(localStorage.getItem("access")); // renamed to avoid conflict
@@ -131,7 +134,7 @@ export default function Navbar({ role, loadingRole }) {
     { label: "Contact", path: "/#contact" },
   ];
 
-  const linksToShow = role === "admin" ? adminLinks : userLinks;
+  const linksToShow = (role === "admin" || role === "superadmin") ? adminLinks : userLinks;
 
   if (loadingRole) {
     return (
@@ -220,7 +223,7 @@ export default function Navbar({ role, loadingRole }) {
                 );
               })}
             </div>
-            {isAuthenticated && role === "admin" && (
+            {isAuthenticated && (role === "admin" || role === "superadmin") && (
               <li className="navbar-cart">
                 <div className="cart-icon-container" onClick={() => setShowAdminCartModal(true)}>
                   <img src={ShoppingCartIcon} alt="cart" style={{ cursor: "pointer" }} />

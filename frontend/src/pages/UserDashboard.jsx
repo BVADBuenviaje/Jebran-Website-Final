@@ -19,6 +19,14 @@ const UserDashboard = () => {
   const [loadingRole, setLoadingRole] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
 
+  const ROLE_FILTERS = [
+    { label: "Admin", value: "admin" },
+    { label: "Reseller", value: "reseller" },
+    { label: "Customer", value: "customer" },
+    { label: "Superadmin", value: "superadmin" }, // <-- Add this line
+    { label: "Blocked", value: "blocked" }
+  ];
+
   useEffect(() => {
     fetchWithAuth(`${import.meta.env.VITE_ACCOUNTS_URL}/users/`)
       .then((res) => res.json())
@@ -66,6 +74,29 @@ const UserDashboard = () => {
       });
     return () => { isMounted = false; };
   }, []);
+
+  const getRoleOptions = (currentUserRole, currentUserId, user) => {
+    if (currentUserRole === "superadmin") {
+      if (user.id === currentUserId) {
+        return [{ label: "Superadmin", value: "superadmin" }];
+      }
+      return [
+        { label: "Admin", value: "admin" },
+        { label: "Reseller", value: "reseller" },
+        { label: "Customer", value: "customer" }
+      ];
+    }
+    if (currentUserRole === "admin") {
+      if (user.role === "admin" || user.role === "superadmin" || user.id === currentUserId) {
+        return [{ label: user.role.charAt(0).toUpperCase() + user.role.slice(1), value: user.role }];
+      }
+      return [
+        { label: "Reseller", value: "reseller" },
+        { label: "Customer", value: "customer" }
+      ];
+    }
+    return [{ label: user.role.charAt(0).toUpperCase() + user.role.slice(1), value: user.role }];
+  };
 
   let filteredUsers = users
     .filter(u => {
@@ -149,7 +180,7 @@ const UserDashboard = () => {
     );
   }
   
-  if (role !== "admin") return <Navigate to="/login" />;
+  if (role !== "admin" && role !== "superadmin") return <Navigate to="/login" />;
 
   const totalUsers = users.length;
 
@@ -230,7 +261,18 @@ const UserDashboard = () => {
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <RoleCheckboxes selectedRoles={selectedRoles} onChange={handleRoleFilterChange} />
+                <div className="flex items-center gap-2">
+                  {ROLE_FILTERS.map(r => (
+                    <label key={r.value} className="flex items-center gap-1 text-xs font-medium">
+                      <input
+                        type="checkbox"
+                        checked={selectedRoles.includes(r.value)}
+                        onChange={() => handleRoleFilterChange(r.value)}
+                      />
+                      {r.label}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="flex-1 max-w-md">
                 <div className="relative">
@@ -321,12 +363,15 @@ const UserDashboard = () => {
                           value={user.role}
                           onChange={(e) => handleRoleChange(user, e.target.value)}
                           className="px-2 py-1 border border-gray-300 rounded text-xs bg-white"
-                          disabled={user.id === currentUserId}
+                          disabled={
+                            (role === "superadmin" && user.id === currentUserId) ||
+                            (role === "admin" && (user.role === "admin" || user.role === "superadmin" || user.id === currentUserId))
+                          }
                           title={user.id === currentUserId ? "You cannot change your own role" : "Change role"}
                         >
-                          <option value="customer">Customer</option>
-                          <option value="reseller">Reseller</option>
-                          <option value="admin">Admin</option>
+                          {getRoleOptions(role, currentUserId, user).map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
                         </select>
                         <button
                           onClick={() => handleBlock({...user, is_blocked: !user.is_blocked})}

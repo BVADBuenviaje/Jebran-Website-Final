@@ -5,6 +5,8 @@ const BatchModal = ({ open, ingredient, onClose, onBatchesChange }) => {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [edits, setEdits] = useState({});
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
   const [newBatch, setNewBatch] = useState({ quantity: "", expiry: "", loading: false, error: "" });
 
   const getIngredientIdFromBatch = (b) => {
@@ -151,6 +153,8 @@ const BatchModal = ({ open, ingredient, onClose, onBatchesChange }) => {
       });
 
       setEdits(prev => ({ ...prev, [id]: { quantity: updated.current_quantity ?? updated.quantity_received ?? "", expiry: updated.expiry_date ?? "", loading: false, error: "" } }));
+      setConfirmMessage("Batch updated successfully!");
+      setShowConfirm(true);
     } catch (err) {
       console.error("Save batch failed", err);
       setEdits(prev => ({ ...prev, [id]: { ...(prev[id]||{}), loading: false, error: "Save failed" } }));
@@ -200,6 +204,8 @@ const BatchModal = ({ open, ingredient, onClose, onBatchesChange }) => {
         return updated;
       });
       setNewBatch({ quantity: "", expiry: "", loading: false, error: "" });
+      setConfirmMessage("New batch added successfully!");
+      setShowConfirm(true);
     } catch (err) {
       setNewBatch(prev => ({ ...prev, loading: false, error: "Failed to add batch" }));
       alert("Failed to add batch. See inline error.");
@@ -279,7 +285,12 @@ const BatchModal = ({ open, ingredient, onClose, onBatchesChange }) => {
           ) : batches.length === 0 ? (
             <div className="text-sm text-gray-500">No batches found for this ingredient.</div>
           ) : (
-            batches.map(batch => {
+            batches
+              .filter(batch => {
+                const qty = batch.current_quantity ?? batch.quantity_received ?? batch.quantity ?? 0;
+                return Number(qty) > 0;
+              })
+              .map(batch => {
               const e = edits[batch.id] || { quantity: batch.current_quantity ?? batch.quantity_received ?? "", expiry: batch.expiry_date ?? "", loading: false, error: "" };
               const expiryInfo = getExpiryStatus(batch.expiry_date);
               return (
@@ -319,6 +330,19 @@ const BatchModal = ({ open, ingredient, onClose, onBatchesChange }) => {
           )}
         </div>
       </div>
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs text-center">
+            <p className="text-lg font-semibold mb-4">{confirmMessage}</p>
+            <button
+              className="px-4 py-2 rounded bg-[#f08b51] text-white hover:bg-[#d9734a]"
+              onClick={() => setShowConfirm(false)}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

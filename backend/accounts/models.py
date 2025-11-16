@@ -6,7 +6,8 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         CUSTOMER = "customer", "Customer"
         ADMIN = "admin", "Admin"
-        RESELLER = "reseller", "Reseller"  # Added reseller role
+        RESELLER = "reseller", "Reseller"
+        SUPERADMIN = "superadmin", "Superadmin"
 
     full_name = models.CharField(max_length=255, blank=True)
     email = models.EmailField(unique=True, blank=False)  # <-- Add this line

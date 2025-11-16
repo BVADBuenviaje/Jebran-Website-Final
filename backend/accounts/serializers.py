@@ -21,6 +21,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
+        # Prevent creating superadmin via serializer unless explicitly allowed
+        if validated_data.get("role") == "superadmin":
+            raise serializers.ValidationError("Cannot create superadmin via signup.")
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -28,6 +31,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
+        # Prevent changing role if user is superadmin
+        if instance.role == "superadmin" and "role" in validated_data and validated_data["role"] != "superadmin":
+            raise serializers.ValidationError("You cannot change the role of a superadmin.")
         for k, v in validated_data.items():
             setattr(instance, k, v)
         if password:

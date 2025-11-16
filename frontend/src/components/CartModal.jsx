@@ -9,7 +9,7 @@ const CartModal = ({ role, onClose }) => {
     let url = "";
     if (role === "reseller") {
       url = `${import.meta.env.VITE_INVENTORY_URL}/products/?status=Active`;
-    } else if (role === "admin") {
+    } else if (role === "admin" || role === "superadmin") {
       url = `${import.meta.env.VITE_INVENTORY_URL}/ingredients/?is_active=true`;
     } else {
       setItems([]);
@@ -50,7 +50,7 @@ const CartModal = ({ role, onClose }) => {
                   {role === "reseller" && (
                     <span className="ml-2 text-gray-600">₱{item.price}</span>
                   )}
-                  {role === "admin" && (
+                  {(role === "admin" || role === "superadmin") && (
                     <span className="ml-2 text-gray-600">{item.unit_of_measurement}</span>
                   )}
                 </li>

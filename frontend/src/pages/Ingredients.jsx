@@ -45,6 +45,36 @@ const Ingredients = () => {
     return Number.isNaN(n) ? null : n;
   };
 
+  // NEW: Helper to get unexpired stock for an ingredient
+  const getUnexpiredStock = async (ingredientId) => {
+    try {
+      const res = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/batches/?ingredient=${ingredientId}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      // Ensure batches are only for this ingredient
+      const batches = (Array.isArray(data) ? data : data.results || []).filter(b => {
+        // Defensive: check batch.ingredient matches ingredientId
+        if (typeof b.ingredient === "number") return b.ingredient === ingredientId;
+        if (b.ingredient && typeof b.ingredient === "object" && b.ingredient.id) return b.ingredient.id === ingredientId;
+        return false;
+      });
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return batches.reduce((sum, b) => {
+        if (b.expiry_date) {
+          const exp = new Date(b.expiry_date);
+          exp.setHours(0, 0, 0, 0);
+          if (exp < today) return sum; // skip expired
+        }
+        const q = b.current_quantity ?? b.quantity_received ?? b.quantity ?? 0;
+        const n = Number(q) || 0;
+        return sum + n;
+      }, 0);
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     const token = localStorage.getItem("access");
@@ -82,7 +112,7 @@ const Ingredients = () => {
   }, [role, navigate]);
 
   useEffect(() => {
-    if (role === "admin" || role === "reseller") {
+    if (role === "admin" || role === "superadmin" || role === "reseller") {
       const fetchIngredients = async () => {
         try {
           setLoading(true);
@@ -96,7 +126,14 @@ const Ingredients = () => {
               ...i,
               current_stock: i.current_stock ?? i.total_stock ?? null,
             }));
-          setIngredients(normalized);
+
+          // Fetch unexpired stock for each ingredient
+          const updated = await Promise.all(normalized.map(async (ing) => {
+            const stock = await getUnexpiredStock(ing.id);
+            return { ...ing, current_stock: stock };
+          }));
+
+          setIngredients(updated);
         } catch (err) {
           console.error("Error fetching ingredients:", err);
         } finally {
@@ -262,7 +299,7 @@ const Ingredients = () => {
     );
   }
 
-  if (role !== "admin") return <Navigate to="/login" />;
+  if (role !== "admin" && role !== "superadmin") return <Navigate to="/login" />;
 
   return (
     <div className="min-h-screen bg-gray-50">

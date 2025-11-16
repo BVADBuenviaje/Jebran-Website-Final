@@ -71,7 +71,7 @@ const Products = () => {
   }, [role, navigate])
 
   useEffect(() => {
-    if (role === "admin" || role === "reseller") {
+    if (role === "admin" || role === "superadmin" || role === "reseller") {
       const fetchProducts = async () => {
         try {
           setLoading(true)
@@ -430,7 +430,7 @@ const Products = () => {
     );
   }
 
-  if (role !== "admin") return <Navigate to="/login" />;
+  if (role !== "admin" && role !== "superadmin") return <Navigate to="/login" />;
 
   return (
     <div className="min-h-screen bg-gray-50">

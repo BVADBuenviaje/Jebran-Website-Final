@@ -6,7 +6,10 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
     email: "",
     username: "",
     shop_name: "",
-    shop_address: "",
+    province: "",
+    city: "",
+    barangay: "",
+    street: "",
     password: "",
     confirm_password: "",
     contact_number: "",
@@ -21,6 +24,12 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
   const [existsModal, setExistsModal] = useState(false);
   const [existsMessage, setExistsMessage] = useState("");
 
+  // Concatenate address fields
+  const getFullAddress = () => {
+    const { street, barangay, city, province } = form;
+    return [street, barangay, city, province].filter(Boolean).join(", ");
+  };
+
   // Validation for all fields
   const allValid =
     form.full_name &&
@@ -28,7 +37,10 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) &&
     form.username &&
     form.shop_name &&
-    form.shop_address &&
+    form.province &&
+    form.city &&
+    form.barangay &&
+    form.street &&
     form.password &&
     form.confirm_password &&
     form.password === form.confirm_password &&
@@ -98,9 +110,9 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
 
   const handleConfirm = () => {
     setShowConfirm(false);
-    onSubmit(form);
+    // Pass full address as shop_address
+    onSubmit({ ...form, shop_address: getFullAddress() });
   };
-
   const handleCancel = () => {
     setShowConfirm(false);
   };
@@ -111,10 +123,10 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
       encType="multipart/form-data"
       className="min-h-screen flex flex-col justify-center max-w-md w-full bg-white p-8 shadow-md space-y-4 mx-auto"
       style={{
-          border: "none", // No border
-          borderRadius: "1rem", 
-          boxShadow: "0 0 60px 0 rgba(248,156,78,0.25), 0 0 60px 0 rgba(248,156,78,0.25) inset",
-        }}
+        border: "none",
+        borderRadius: "1rem",
+        boxShadow: "0 0 60px 0 rgba(248,156,78,0.25), 0 0 60px 0 rgba(248,156,78,0.25) inset",
+      }}
     >
       <h1 className="text-2xl font-bold font-montserrat text-center mb-6 tracking-widest" style={{ color: "#f89c4e" }}>
         SIGN UP
@@ -219,28 +231,65 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             </div>
           )}
         </div>
+        {/* Modular Address Fields */}
         <div>
-          <label htmlFor="shop_address" className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
+          <label className="block mb-1 font-medium" style={{ color: "#f89c4e" }}>
             Shop Address
           </label>
-          <input
-            id="shop_address"
-            name="shop_address"
-            placeholder="Shop Address"
-            value={form.shop_address}
-            onChange={handleChange}
-            className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
-            style={{
-              borderColor: "#f89c4e",
-              background: "#fffbe8",
-              color: "#bb6653",
-            }}
-          />
-          {submitted && !form.shop_address && (
-            <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
-              Please enter your shop address.
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <input
+                name="province"
+                placeholder="Province"
+                value={form.province}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+                style={{ borderColor: "#f89c4e", background: "#fffbe8", color: "#bb6653" }}
+              />
+              {submitted && !form.province && (
+                <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">Please enter your province.</div>
+              )}
             </div>
-          )}
+            <div>
+              <input
+                name="city"
+                placeholder="City"
+                value={form.city}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+                style={{ borderColor: "#f89c4e", background: "#fffbe8", color: "#bb6653" }}
+              />
+              {submitted && !form.city && (
+                <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">Please enter your city.</div>
+              )}
+            </div>
+            <div>
+              <input
+                name="barangay"
+                placeholder="Barangay"
+                value={form.barangay}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+                style={{ borderColor: "#f89c4e", background: "#fffbe8", color: "#bb6653" }}
+              />
+              {submitted && !form.barangay && (
+                <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">Please enter your barangay.</div>
+              )}
+            </div>
+            <div>
+              <input
+                name="street"
+                placeholder="Street"
+                value={form.street}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border-2 rounded focus:outline-none focus:ring-2 cursor-pointer"
+                style={{ borderColor: "#f89c4e", background: "#fffbe8", color: "#bb6653" }}
+              />
+              {submitted && !form.street && (
+                <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">Please enter your street.</div>
+              )}
+            </div>
+          </div>
         </div>
         <div className="flex gap-4">
           <div className="w-1/2">
@@ -401,7 +450,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
                 type="button"
                 className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
                 style={{
-                  background: "#b95700", // darker orange for Cancel
+                  background: "#b95700",
                   color: "#fffbe8",
                   border: "none",
                   borderRadius: "2rem",
@@ -416,7 +465,7 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
                 type="button"
                 className="min-w-[120px] px-4 py-2 rounded focus:outline-none focus:ring-2 transition-colors"
                 style={{
-                  background: "#f89c4e", // regular orange for Yes
+                  background: "#f89c4e",
                   color: "#fffbe8",
                   border: "none",
                   borderRadius: "2rem",
@@ -477,7 +526,10 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
             !form.email ||
             !form.username ||
             !form.shop_name ||
-            !form.shop_address ||
+            !form.province ||
+            !form.city ||
+            !form.barangay ||
+            !form.street ||
             !form.password ||
             !form.confirm_password ||
             !form.contact_number ||
