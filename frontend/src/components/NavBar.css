@@ -43,6 +43,7 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  margin-right: 2rem;
 }
 
 .navbar-link {
@@ -98,7 +99,6 @@
 .navbar-cart {
   cursor: pointer;
   transition: opacity 0.3s ease;
-  margin-left: 4rem; /* #95C8D8 */
 }
 
 .navbar-cart:hover {

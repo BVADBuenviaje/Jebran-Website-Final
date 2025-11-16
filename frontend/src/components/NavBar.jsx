@@ -7,7 +7,17 @@ import ShoppingCartIcon from "../assets/cart.svg";
 import { useCart } from "../contexts/CartContext";
 import "./NavBar.css";
 import AdminCartModal from "./AdminCartModal";
-
+import {
+  ChefHat,
+  Star,
+  MapPin,
+  Phone,
+  Mail,
+  Clock,
+  Leaf,
+  Zap,
+  Heart,
+} from "lucide-react";
 export default function Navbar({ role, loadingRole }) {
   const [openDropdown, setOpenDropdown] = useState(null); // Add this line
   const dropdownRefs = useRef({}); // Add this line
