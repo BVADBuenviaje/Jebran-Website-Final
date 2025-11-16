@@ -6,10 +6,12 @@ import {
   ChevronDown,
   ClipboardList,
   Clock,
-  Factory,
   Loader2,
   Package,
   Settings2,
+  CheckSquare,
+  Square,
+  CalendarX,
 } from "lucide-react";
 import { fetchWithAuth } from "../utils/auth";
 
@@ -41,6 +43,9 @@ const EMPTY_REQUIREMENTS = {
   requires_disabled_override: false,
   can_produce: false,
   generated_at: null,
+  orders_with_disabled_products: [],
+  orders_with_disabled_ingredients: [],
+  has_only_expired_stock: false,
 };
 
 export default function Production() {
@@ -52,6 +57,7 @@ export default function Production() {
   const [activeTab, setActiveTab] = useState("pending");
   const [requirements, setRequirements] = useState(EMPTY_REQUIREMENTS);
   const [batchOrders, setBatchOrders] = useState([]);
+  const [selectedOrders, setSelectedOrders] = useState(new Set());
   const [config, setConfig] = useState({
     default_start_time: "22:00",
     default_end_time: "21:59",
@@ -59,16 +65,10 @@ export default function Production() {
     allow_custom_windows: true,
   });
   const [configDraft, setConfigDraft] = useState(null);
-  const [newBatchDraft, setNewBatchDraft] = useState({
-    window_start: "",
-    window_end: "",
-    notes: "",
-  });
   const [loadingBatches, setLoadingBatches] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
-  const [creatingBatch, setCreatingBatch] = useState(false);
   const [produceLoading, setProduceLoading] = useState(false);
   const [error, setError] = useState("");
   const [dateFilter, setDateFilter] = useState({
@@ -235,6 +235,8 @@ export default function Production() {
   useEffect(() => {
     if (selectedBatchId) {
       loadBatchDetail(selectedBatchId);
+      // Clear selections when batch changes
+      setSelectedOrders(new Set());
     }
   }, [selectedBatchId, loadBatchDetail]);
 
@@ -262,81 +264,239 @@ export default function Production() {
     }
   };
 
-  const handleCreateBatch = async () => {
-    if (!newBatchDraft.window_start || !newBatchDraft.window_end) {
-      alert("Please provide both start and end times.");
-      return;
-    }
-    setCreatingBatch(true);
-    try {
-      const res = await fetchWithAuth(`${INVENTORY_API}/production-batches/`, {
-        method: "POST",
-        body: JSON.stringify(newBatchDraft),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.detail || "Failed to create batch.");
-        return;
+
+  const handleToggleOrderSelection = (orderId) => {
+    setSelectedOrders((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
       }
-      setNewBatchDraft({ window_start: "", window_end: "", notes: "" });
-      await fetchBatchList();
-    } catch (err) {
-      alert("Unable to create batch.");
-    } finally {
-      setCreatingBatch(false);
-    }
+      return newSet;
+    });
   };
 
-  const handleMoveOrderToNext = async (orderId) => {
-    if (!orderId || !selectedBatchId) return;
-    const confirmed = window.confirm("Move this order to the next production batch?");
+  const handleSelectAllOrders = () => {
+    const canMove = batchOrders.some((assignment) => {
+      const batch = [...pendingBatches, ...producedBatches, ...cancelledBatches].find(
+        b => b.id === selectedBatchId
+      );
+      return batch?.status === "pending";
+    });
+    
+    if (!canMove) {
+      return;
+    }
+
+    // Don't select all if it would leave batch empty
+    const allOrderIds = batchOrders
+      .map((assignment) => assignment.order_detail?.id || assignment.order)
+      .filter(Boolean);
+    
+    if (allOrderIds.length <= 1) {
+      return;
+    }
+
+    // Select all but one (to prevent leaving batch empty)
+    const ordersToSelect = allOrderIds.slice(0, -1);
+    setSelectedOrders(new Set(ordersToSelect));
+  };
+
+  const handleDeselectAllOrders = () => {
+    setSelectedOrders(new Set());
+  };
+
+  const handleMoveSelectedOrdersToNext = async () => {
+    if (!selectedBatchId || selectedOrders.size === 0) return;
+    
+    const orderIds = Array.from(selectedOrders);
+    const orderCount = orderIds.length;
+    
+    // Check if moving these orders would leave the batch empty
+    const remainingOrders = batchOrders.length - orderCount;
+    if (remainingOrders < 1) {
+      alert("Cannot move all orders. At least one order must remain in the batch.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Move ${orderCount} order${orderCount === 1 ? '' : 's'} to the next production batch?`
+    );
     if (!confirmed) return;
+
+    let lastResult = null;
+    let successCount = 0;
+    let failedOrders = [];
+
     try {
-      const res = await fetchWithAuth(`${INVENTORY_API}/production-batches/${selectedBatchId}/move-order-next/`, {
-        method: "POST",
-        body: JSON.stringify({ order_id: orderId }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.detail || "Failed to move order.");
-        return;
+      // Move orders sequentially
+      for (const orderId of orderIds) {
+        try {
+          const res = await fetchWithAuth(`${INVENTORY_API}/production-batches/${selectedBatchId}/move-order-next/`, {
+            method: "POST",
+            body: JSON.stringify({ order_id: orderId }),
+          });
+          
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            failedOrders.push({ orderId, error: data.detail || "Failed to move order" });
+            continue;
+          }
+          
+          lastResult = await res.json();
+          successCount++;
+        } catch (err) {
+          failedOrders.push({ orderId, error: "Network error" });
+        }
       }
-      const result = await res.json();
+
       // Refresh batch lists so navigation tabs stay accurate
       await fetchBatchList();
 
-      // If backend returned updated requirements for original batch, use them; otherwise reload
-      if (result?.original_requirements && result.original_batch_id === selectedBatchId) {
-        setRequirements({ ...EMPTY_REQUIREMENTS, ...result.original_requirements });
+      // Update requirements and orders for the current batch
+      if (lastResult?.original_requirements && lastResult.original_batch_id === selectedBatchId) {
+        setRequirements({ ...EMPTY_REQUIREMENTS, ...lastResult.original_requirements });
       } else {
         await loadBatchDetail(selectedBatchId);
       }
 
-      // Remove the moved order from current batchOrders list
-      setBatchOrders((prev) => prev.filter((assignment) => assignment.order !== orderId && assignment.order_detail?.id !== orderId));
+      // Remove moved orders from current batchOrders list
+      setBatchOrders((prev) => 
+        prev.filter((assignment) => {
+          const orderId = assignment.order_detail?.id || assignment.order;
+          return !orderIds.includes(orderId);
+        })
+      );
 
-      // Offer navigation to new batch without forcing switch
-      if (result?.target_batch_id) {
-        // Store target batch id in a transient notification
-        const goNow = window.confirm(`Order moved to new batch ${result.target_batch_id}. Go to that batch now?`);
-        if (goNow) {
-          setSelectedBatchId(result.target_batch_id);
-          setActiveTab("pending");
-          // Use returned data for target if present
-          if (Array.isArray(result.orders)) {
-            setBatchOrders(result.orders);
-          } else {
-            setBatchOrders([]);
+      // Clear selections
+      setSelectedOrders(new Set());
+
+      // Show results
+      if (failedOrders.length > 0) {
+        const failedList = failedOrders.map(f => `Order #${f.orderId}: ${f.error}`).join('\n');
+        alert(`${successCount} order${successCount === 1 ? '' : 's'} moved successfully.\n\nFailed:\n${failedList}`);
+      } else {
+        // Offer navigation to new batch if all succeeded
+        if (lastResult?.target_batch_id) {
+          const goNow = window.confirm(
+            `${successCount} order${successCount === 1 ? '' : 's'} moved to batch ${lastResult.target_batch_id}. Go to that batch now?`
+          );
+          if (goNow) {
+            await fetchBatchList();
+            setSelectedBatchId(lastResult.target_batch_id);
+            setExpandedBatchId(lastResult.target_batch_id);
+            setActiveTab("pending");
+            if (Array.isArray(lastResult.orders)) {
+              setBatchOrders(lastResult.orders);
+            } else {
+              setBatchOrders([]);
+            }
+            if (lastResult.requirements) {
+              setRequirements({ ...EMPTY_REQUIREMENTS, ...lastResult.requirements });
+            } else {
+              await loadBatchDetail(lastResult.target_batch_id);
+            }
           }
-          if (result.requirements) {
-            setRequirements({ ...EMPTY_REQUIREMENTS, ...result.requirements });
-          } else {
-            await loadBatchDetail(result.target_batch_id);
-          }
+        } else {
+          alert(`${successCount} order${successCount === 1 ? '' : 's'} moved successfully.`);
         }
       }
-    } catch {
-      alert("Unable to move order.");
+    } catch (err) {
+      alert(`Error moving orders: ${err.message || "Unknown error"}`);
+    }
+  };
+
+  const handleMoveSelectedOrdersToPrevious = async () => {
+    if (!selectedBatchId || selectedOrders.size === 0) return;
+    
+    const orderIds = Array.from(selectedOrders);
+    const orderCount = orderIds.length;
+
+    const confirmed = window.confirm(
+      `Move ${orderCount} order${orderCount === 1 ? '' : 's'} back to the previous production batch?`
+    );
+    if (!confirmed) return;
+
+    let lastResult = null;
+    let successCount = 0;
+    let failedOrders = [];
+
+    try {
+      // Move orders sequentially
+      for (const orderId of orderIds) {
+        try {
+          const res = await fetchWithAuth(`${INVENTORY_API}/production-batches/${selectedBatchId}/move-order-previous/`, {
+            method: "POST",
+            body: JSON.stringify({ order_id: orderId }),
+          });
+          
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            failedOrders.push({ orderId, error: data.detail || "Failed to move order" });
+            continue;
+          }
+          
+          lastResult = await res.json();
+          successCount++;
+        } catch (err) {
+          failedOrders.push({ orderId, error: "Network error" });
+        }
+      }
+
+      // Refresh batch lists so navigation tabs stay accurate
+      await fetchBatchList();
+
+      // Update requirements and orders for the current batch
+      if (lastResult?.original_requirements && lastResult.original_batch_id === selectedBatchId) {
+        setRequirements({ ...EMPTY_REQUIREMENTS, ...lastResult.original_requirements });
+      } else {
+        await loadBatchDetail(selectedBatchId);
+      }
+
+      // Remove moved orders from current batchOrders list
+      setBatchOrders((prev) => 
+        prev.filter((assignment) => {
+          const orderId = assignment.order_detail?.id || assignment.order;
+          return !orderIds.includes(orderId);
+        })
+      );
+
+      // Clear selections
+      setSelectedOrders(new Set());
+
+      // Show results
+      if (failedOrders.length > 0) {
+        const failedList = failedOrders.map(f => `Order #${f.orderId}: ${f.error}`).join('\n');
+        alert(`${successCount} order${successCount === 1 ? '' : 's'} moved successfully.\n\nFailed:\n${failedList}`);
+      } else {
+        // Offer navigation to previous batch if all succeeded
+        if (lastResult?.target_batch_id) {
+          const goNow = window.confirm(
+            `${successCount} order${successCount === 1 ? '' : 's'} moved back to batch ${lastResult.target_batch_id}. Go to that batch now?`
+          );
+          if (goNow) {
+            await fetchBatchList();
+            setSelectedBatchId(lastResult.target_batch_id);
+            setExpandedBatchId(lastResult.target_batch_id);
+            setActiveTab("pending");
+            if (Array.isArray(lastResult.orders)) {
+              setBatchOrders(lastResult.orders);
+            } else {
+              setBatchOrders([]);
+            }
+            if (lastResult.requirements) {
+              setRequirements({ ...EMPTY_REQUIREMENTS, ...lastResult.requirements });
+            } else {
+              await loadBatchDetail(lastResult.target_batch_id);
+            }
+          }
+        } else {
+          alert(`${successCount} order${successCount === 1 ? '' : 's'} moved back successfully.`);
+        }
+      }
+    } catch (err) {
+      alert(`Error moving orders: ${err.message || "Unknown error"}`);
     }
   };
 
@@ -351,9 +511,24 @@ export default function Production() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (data.requires_disabled_override && !forceDisabled) {
-          const disabledNames = Array.isArray(data.disabled)
-            ? Array.from(new Set(data.disabled.map((item) => item.ingredient))).filter(Boolean).join(", ")
-            : "";
+          // Only allow override for disabled ingredients, not disabled products
+          const disabledIngredients = Array.isArray(data.disabled)
+            ? data.disabled.filter(item => item.reason !== "product_disabled")
+            : [];
+          const disabledProducts = Array.isArray(data.disabled)
+            ? data.disabled.filter(item => item.reason === "product_disabled")
+            : [];
+          
+          // If there are disabled products, show error and don't allow override
+          if (disabledProducts.length > 0) {
+            const productNames = disabledProducts.map(item => item.product).filter(Boolean).join(", ");
+            alert(`Cannot produce batch with disabled products: ${productNames}. Please remove these products from orders or reactivate them.`);
+            setRequirements({ ...EMPTY_REQUIREMENTS, ...data });
+            return;
+          }
+          
+          // Only disabled ingredients - allow override
+          const disabledNames = Array.from(new Set(disabledIngredients.map((item) => item.ingredient))).filter(Boolean).join(", ");
           const promptMessage = disabledNames
             ? `The following ingredients are disabled: ${disabledNames}. Proceed with production using the remaining ingredients?`
             : "Some recipe ingredients are disabled. Proceed with production using the remaining ingredients?";
@@ -464,13 +639,26 @@ export default function Production() {
                   <span>Batch #{batch.id}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {batch.has_disabled_ingredients && (
+                  {batch.has_disabled_items && (
                     <span
-                      title={`${batch.disabled_ingredient_count} disabled ingredient${batch.disabled_ingredient_count === 1 ? '' : 's'} detected`}
-                      className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-1 text-xs font-bold text-white shadow-sm"
+                      title={
+                        (batch.has_disabled_products && batch.has_disabled_ingredients)
+                          ? `${batch.disabled_product_count || 0} disabled product${(batch.disabled_product_count || 0) === 1 ? '' : 's'}, ${batch.disabled_ingredient_count || 0} disabled ingredient${(batch.disabled_ingredient_count || 0) === 1 ? '' : 's'}`
+                          : batch.has_disabled_products
+                            ? `${batch.disabled_product_count || 0} disabled product${(batch.disabled_product_count || 0) === 1 ? '' : 's'}`
+                            : `${batch.disabled_ingredient_count || 0} disabled ingredient${(batch.disabled_ingredient_count || 0) === 1 ? '' : 's'}`
+                      }
+                      className="inline-flex items-center rounded-md bg-amber-500 px-2 py-1 text-xs font-bold text-white shadow-sm"
                     >
                       <AlertTriangle className="h-3.5 w-3.5" />
-                      {batch.disabled_ingredient_count}
+                    </span>
+                  )}
+                  {batch.has_only_expired_stock && (
+                    <span
+                      title="Only expired stock available for some ingredients. Restock required."
+                      className="inline-flex items-center rounded-md bg-orange-500 px-2 py-1 text-xs font-bold text-white shadow-sm"
+                    >
+                      <CalendarX className="h-3.5 w-3.5" />
                     </span>
                   )}
                   <span className="text-xs uppercase tracking-wide text-gray-500">{batch.status}</span>
@@ -479,11 +667,6 @@ export default function Production() {
               <div className="mt-1 text-xs text-gray-500">
                 <div>Window: {formatDateTime(batch.window_start)} → {formatDateTime(batch.window_end)}</div>
                 <div>Orders: {batch.orders_count ?? 0}</div>
-                {batch.has_disabled_ingredients && (
-                  <div className="mt-1 text-xs font-medium text-amber-600">
-                    {batch.disabled_ingredient_count} disabled ingredient{batch.disabled_ingredient_count === 1 ? '' : 's'}
-                  </div>
-                )}
               </div>
             </button>
 
@@ -505,10 +688,31 @@ export default function Production() {
                             e.stopPropagation();
                             handleProduce({});
                           }}
-                          disabled={produceLoading || !requirements.can_produce || batchOrders.length === 0}
-                          title={batchOrders.length === 0 ? "Cannot produce a batch with no orders" : !requirements.can_produce ? "Cannot produce - check ingredient requirements" : "Produce this batch"}
+                          disabled={
+                            produceLoading || 
+                            !requirements.can_produce || 
+                            batchOrders.length === 0 || 
+                            (requirements.disabled && requirements.disabled.some(item => item.reason === "product_disabled")) ||
+                            requirements.has_only_expired_stock
+                          }
+                          title={
+                            batchOrders.length === 0 
+                              ? "Cannot produce a batch with no orders" 
+                              : requirements.has_only_expired_stock
+                                ? "Cannot produce - only expired stock available"
+                              : (requirements.disabled && requirements.disabled.some(item => item.reason === "product_disabled"))
+                                ? "Cannot produce - disabled products detected"
+                                : !requirements.can_produce 
+                                  ? "Cannot produce - check ingredient requirements" 
+                                  : "Produce this batch"
+                          }
                           className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white shadow-sm ${
-                            requirements.can_produce && batchOrders.length > 0 ? "bg-[#f08b51] hover:bg-[#d8713a]" : "bg-gray-300 cursor-not-allowed"
+                            requirements.can_produce && 
+                            batchOrders.length > 0 && 
+                            (!requirements.disabled || !requirements.disabled.some(item => item.reason === "product_disabled")) &&
+                            !requirements.has_only_expired_stock
+                              ? "bg-[#f08b51] hover:bg-[#d8713a]" 
+                              : "bg-gray-300 cursor-not-allowed"
                           }`}
                         >
                           {produceLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
@@ -579,32 +783,145 @@ export default function Production() {
                           </table>
                         </div>
                       )}
-                      {requirements.disabled && requirements.disabled.length > 0 && (
-                        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                      {requirements.disabled && requirements.disabled.length > 0 && (() => {
+                        const disabledProducts = requirements.disabled.filter(item => item.reason === "product_disabled");
+                        const disabledIngredients = requirements.disabled.filter(item => item.reason !== "product_disabled");
+                        const uniqueProducts = [...new Set(disabledProducts.map(item => item.product))];
+                        
+                        // Group disabled ingredients by ingredient name and collect their products
+                        const ingredientProductMap = new Map();
+                        disabledIngredients.forEach(item => {
+                          const ingredientName = item.ingredient;
+                          const productName = item.product;
+                          if (ingredientName) {
+                            if (!ingredientProductMap.has(ingredientName)) {
+                              ingredientProductMap.set(ingredientName, new Set());
+                            }
+                            if (productName) {
+                              ingredientProductMap.get(ingredientName).add(productName);
+                            }
+                          }
+                        });
+                        
+                        const hasProducts = uniqueProducts.length > 0;
+                        const hasIngredients = ingredientProductMap.size > 0;
+                        
+                        return (
+                          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                            <AlertTriangle className="mr-2 inline h-4 w-4" />
+                            {hasProducts && hasIngredients
+                              ? `Disabled products and ingredients detected:`
+                              : hasProducts
+                                ? `Disabled products detected:`
+                                : `Disabled ingredients detected:`}
+                            {hasProducts && (
+                              <div className="mt-2">
+                                <p className="font-semibold text-amber-900">Products:</p>
+                                <ul className="mt-1 space-y-1 text-amber-800">
+                                  {uniqueProducts.map((productName, idx) => (
+                                    <li key={`product-${idx}`}>
+                                      • {productName}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {hasIngredients && (
+                              <div className={`mt-2 ${hasProducts ? '' : ''}`}>
+                                <p className="font-semibold text-amber-900">Ingredients:</p>
+                                <ul className="mt-1 space-y-1 text-amber-800">
+                                  {Array.from(ingredientProductMap.entries()).map(([ingredientName, products], idx) => {
+                                    const productList = Array.from(products).sort().join(", ");
+                                    return (
+                                      <li key={`ingredient-${idx}`}>
+                                        • {ingredientName}{productList ? ` (${productList})` : ''}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            )}
+                            <p className="mt-2 text-xs font-medium text-amber-900">
+                              Production is disabled until these items are resolved.
+                            </p>
+                          </div>
+                        );
+                      })()}
+                      {requirements.has_only_expired_stock && (
+                        <div className="mt-4 rounded-md border border-orange-300 bg-orange-50 p-3 text-sm text-orange-800">
                           <AlertTriangle className="mr-2 inline h-4 w-4" />
-                          Disabled ingredients detected:
-                          <ul className="mt-2 space-y-1 text-amber-800">
-                            {requirements.disabled.map((item, idx) => (
-                              <li key={`${item.ingredient_id}-${idx}`}>
-                                • {item.ingredient} (product: {item.product})
-                              </li>
-                            ))}
-                          </ul>
+                          <strong>Warning:</strong> Only expired stock is available for some ingredients. Please restock with fresh ingredients before producing.
                         </div>
                       )}
-                      {shortages.length > 0 && (
+                      {shortages.length > 0 && !requirements.has_only_expired_stock && (
                         <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                           <AlertTriangle className="mr-2 inline h-4 w-4" />
                           Resolve shortages before producing.
+                        </div>
+                      )}
+                      {shortages.length > 0 && requirements.has_only_expired_stock && (
+                        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                          <AlertTriangle className="mr-2 inline h-4 w-4" />
+                          Insufficient stock: Only expired ingredients available. Restock required.
                         </div>
                       )}
                     </div>
 
                     {/* Orders Section */}
                     <div className="rounded-lg border border-gray-200 bg-white p-4">
-                      <div className="flex items-center gap-2 mb-3 text-base font-semibold text-gray-900">
-                        <ClipboardList className="h-5 w-5 text-[#f08b51]" />
-                        Orders in this batch
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                          <ClipboardList className="h-5 w-5 text-[#f08b51]" />
+                          Orders in this batch
+                        </div>
+                        {batch.status === "pending" && batchOrders.length > 1 && (
+                          <div className="flex items-center gap-2">
+                            {selectedOrders.size > 0 && (
+                              <>
+                                <button
+                                  onClick={handleDeselectAllOrders}
+                                  className="text-xs text-gray-600 hover:text-gray-900 underline"
+                                >
+                                  Deselect All
+                                </button>
+                                <span className="text-xs text-gray-400">|</span>
+                              </>
+                            )}
+                            <button
+                              onClick={handleSelectAllOrders}
+                              className="text-xs text-gray-600 hover:text-gray-900 underline"
+                            >
+                              Select All
+                            </button>
+                            {selectedOrders.size > 0 && (
+                              <>
+                                <button
+                                  onClick={handleMoveSelectedOrdersToPrevious}
+                                  title={`Move ${selectedOrders.size} selected order${selectedOrders.size === 1 ? '' : 's'} back to previous batch`}
+                                  className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold border border-gray-400 text-gray-700 bg-white hover:bg-gray-50"
+                                >
+                                  Move {selectedOrders.size} to Previous Batch
+                                </button>
+                                <button
+                                  onClick={handleMoveSelectedOrdersToNext}
+                                  disabled={batchOrders.length - selectedOrders.size < 1}
+                                  title={
+                                    batchOrders.length - selectedOrders.size < 1
+                                      ? "Cannot move all orders. At least one must remain."
+                                      : `Move ${selectedOrders.size} selected order${selectedOrders.size === 1 ? '' : 's'} to next batch`
+                                  }
+                                  className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold border ${
+                                    batchOrders.length - selectedOrders.size < 1
+                                      ? "cursor-not-allowed border-gray-300 text-gray-400 bg-gray-100"
+                                      : "border-[#f08b51] bg-[#f08b51] text-white hover:bg-[#f08b51]/90"
+                                  }`}
+                                >
+                                  Move {selectedOrders.size} to Next Batch
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {batchOrders.length === 0 ? (
                         <p className="text-sm text-gray-500">No orders assigned yet.</p>
@@ -614,36 +931,71 @@ export default function Production() {
                             const orderDetail = assignment.order_detail || {};
                             const items = orderDetail.items || [];
                             const canMove = batch.status === "pending";
-                            const singleOrderInBatch = canMove && batchOrders.length === 1;
+                            const orderId = orderDetail.id || assignment.order;
+                            const isSelected = selectedOrders.has(orderId);
+                            const canSelect = canMove && batchOrders.length > 1;
+                            // Check if selecting this order would leave the batch empty
+                            const wouldLeaveEmpty = canSelect && !isSelected && (batchOrders.length - selectedOrders.size) === 1;
+                            const hasDisabledProduct = requirements.orders_with_disabled_products?.includes(orderId);
+                            const hasDisabledIngredient = requirements.orders_with_disabled_ingredients?.includes(orderId);
+                            const hasDisabledItem = hasDisabledProduct || hasDisabledIngredient;
 
                             return (
-                              <div key={assignment.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                              <div key={assignment.id} className={`rounded-lg border p-4 transition-colors ${
+                                isSelected 
+                                  ? "border-[#f08b51] bg-amber-50" 
+                                  : "border-gray-200 bg-gray-50"
+                              }`}>
                                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                                  <div>
-                                    <h4 className="text-sm font-semibold text-gray-900">
-                                      Order #{orderDetail.id || assignment.order}
-                                    </h4>
-                                    <p className="text-xs text-gray-500">
-                                      Sequence: {assignment.sequence ?? 0} • Assigned by: {assignment.assigned_by_username || "System"}
-                                    </p>
+                                  <div className="flex items-center gap-3">
+                                    {canSelect && (
+                                      <button
+                                        onClick={() => {
+                                          if (wouldLeaveEmpty && !isSelected) {
+                                            alert("Cannot select all orders. At least one order must remain in the batch.");
+                                            return;
+                                          }
+                                          handleToggleOrderSelection(orderId);
+                                        }}
+                                        className="flex-shrink-0"
+                                        title={
+                                          wouldLeaveEmpty && !isSelected
+                                            ? "Cannot select all orders. At least one must remain."
+                                            : isSelected
+                                              ? "Deselect this order"
+                                              : "Select this order to move"
+                                        }
+                                      >
+                                        {isSelected ? (
+                                          <CheckSquare className="h-5 w-5 text-[#f08b51]" />
+                                        ) : (
+                                          <Square className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                                        )}
+                                      </button>
+                                    )}
+                                    <div>
+                                      <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                        Order #{orderId}
+                                        {hasDisabledItem && (
+                                          <span
+                                            title={
+                                              hasDisabledProduct && hasDisabledIngredient
+                                                ? "This order contains disabled products and ingredients"
+                                                : hasDisabledProduct
+                                                  ? "This order contains a disabled product"
+                                                  : "This order contains disabled ingredients"
+                                            }
+                                            className="inline-flex items-center rounded-md bg-amber-500 px-1.5 py-0.5 text-xs font-bold text-white shadow-sm"
+                                          >
+                                            <AlertTriangle className="h-3 w-3" />
+                                          </span>
+                                        )}
+                                      </h4>
+                                      <p className="text-xs text-gray-500">
+                                        Sequence: {assignment.sequence ?? 0} • Assigned by: {assignment.assigned_by_username || "System"}
+                                      </p>
+                                    </div>
                                   </div>
-                                  {canMove && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (!singleOrderInBatch) handleMoveOrderToNext(assignment.order);
-                                      }}
-                                      disabled={singleOrderInBatch}
-                                      title={singleOrderInBatch ? "Can't move the only order; create another batch first." : "Move this order to the next batch"}
-                                      className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold border ${
-                                        singleOrderInBatch
-                                          ? "cursor-not-allowed border-gray-300 text-gray-400 bg-gray-100"
-                                          : "border-[#f08b51] text-[#f08b51] hover:bg-[#f08b51]/10"
-                                      }`}
-                                    >
-                                      Move to Next Batch
-                                    </button>
-                                  )}
                                 </div>
                                 <div className="overflow-x-auto">
                                   <table className="min-w-full text-sm">
@@ -782,36 +1134,6 @@ export default function Production() {
               </div>
             </div>
           )}
-          <div className="mt-8 grid gap-4 md:grid-cols-3 md:items-end">
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">Custom window start</label>
-              <input
-                type="datetime-local"
-                value={newBatchDraft.window_start}
-                onChange={(e) => setNewBatchDraft((prev) => ({ ...prev, window_start: e.target.value }))}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#f08b51] focus:outline-none focus:ring-2 focus:ring-[#f08b51]/40"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">Custom window end</label>
-              <input
-                type="datetime-local"
-                value={newBatchDraft.window_end}
-                onChange={(e) => setNewBatchDraft((prev) => ({ ...prev, window_end: e.target.value }))}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#f08b51] focus:outline-none focus:ring-2 focus:ring-[#f08b51]/40"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCreateBatch}
-                disabled={creatingBatch}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#f08b51] bg-white px-4 py-2 text-sm font-semibold text-[#f08b51] hover:bg-[#f08b51]/10 disabled:cursor-not-allowed disabled:border-[#f08b51]/40 disabled:text-[#f08b51]/40"
-              >
-                {creatingBatch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Factory className="h-4 w-4" />}
-                Create batch from custom window
-              </button>
-            </div>
-          </div>
         </section>
 
         <div className="max-w-6xl mx-auto">

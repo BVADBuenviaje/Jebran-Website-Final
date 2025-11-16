@@ -351,8 +351,12 @@ class ProductionBatchListSerializer(serializers.ModelSerializer):
     Reads disabled flags from pre-calculated requirements_snapshot only - no recalculation.
     """
     orders_count = serializers.SerializerMethodField()
+    has_disabled_items = serializers.SerializerMethodField()
+    has_disabled_products = serializers.SerializerMethodField()
     has_disabled_ingredients = serializers.SerializerMethodField()
+    disabled_product_count = serializers.SerializerMethodField()
     disabled_ingredient_count = serializers.SerializerMethodField()
+    has_only_expired_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductionBatch
@@ -362,8 +366,12 @@ class ProductionBatchListSerializer(serializers.ModelSerializer):
             "window_end",
             "status",
             "orders_count",
+            "has_disabled_items",
+            "has_disabled_products",
             "has_disabled_ingredients",
+            "disabled_product_count",
             "disabled_ingredient_count",
+            "has_only_expired_stock",
         ]
 
     def get_orders_count(self, obj):
@@ -375,23 +383,54 @@ class ProductionBatchListSerializer(serializers.ModelSerializer):
             return len(obj.orders_snapshot)
         return 0
 
-    def get_has_disabled_ingredients(self, obj):
-        """Read from snapshot only - NOT intensive"""
+    def get_has_disabled_items(self, obj):
+        """Check if there are any disabled items (products or ingredients)"""
         if not obj.requirements_snapshot:
             return False
         disabled_list = obj.requirements_snapshot.get("disabled", [])
         return len(disabled_list) > 0
 
-    def get_disabled_ingredient_count(self, obj):
+    def get_has_disabled_products(self, obj):
         """Read from snapshot only - NOT intensive"""
+        if not obj.requirements_snapshot:
+            return False
+        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        return any(item.get("reason") == "product_disabled" for item in disabled_list)
+
+    def get_has_disabled_ingredients(self, obj):
+        """Read from snapshot only - NOT intensive"""
+        if not obj.requirements_snapshot:
+            return False
+        disabled_list = obj.requirements_snapshot.get("disabled", [])
+        return any(item.get("reason") in ("ingredient_disabled", "recipe_disabled") for item in disabled_list)
+
+    def get_disabled_product_count(self, obj):
+        """Count unique disabled products"""
         if not obj.requirements_snapshot:
             return 0
         disabled_list = obj.requirements_snapshot.get("disabled", [])
-        # Count unique ingredient names
+        unique_products = {
+            item.get("product") for item in disabled_list 
+            if item.get("reason") == "product_disabled" and item.get("product")
+        }
+        return len(unique_products)
+
+    def get_disabled_ingredient_count(self, obj):
+        """Count unique disabled ingredients"""
+        if not obj.requirements_snapshot:
+            return 0
+        disabled_list = obj.requirements_snapshot.get("disabled", [])
         unique_ingredients = {
-            item.get("ingredient") for item in disabled_list if item.get("ingredient")
+            item.get("ingredient") for item in disabled_list 
+            if item.get("ingredient") and item.get("reason") in ("ingredient_disabled", "recipe_disabled")
         }
         return len(unique_ingredients)
+
+    def get_has_only_expired_stock(self, obj):
+        """Read from snapshot only - NOT intensive"""
+        if not obj.requirements_snapshot:
+            return False
+        return obj.requirements_snapshot.get("has_only_expired_stock", False)
 
 
 class ProductionBatchSerializer(serializers.ModelSerializer):
@@ -399,8 +438,12 @@ class ProductionBatchSerializer(serializers.ModelSerializer):
     cancelled_by_username = serializers.CharField(source="cancelled_by.username", read_only=True)
     created_by_username = serializers.CharField(source="created_by.username", read_only=True)
     orders_count = serializers.SerializerMethodField()
+    has_disabled_items = serializers.SerializerMethodField()
+    has_disabled_products = serializers.SerializerMethodField()
     has_disabled_ingredients = serializers.SerializerMethodField()
+    disabled_product_count = serializers.SerializerMethodField()
     disabled_ingredient_count = serializers.SerializerMethodField()
+    has_only_expired_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductionBatch
@@ -426,8 +469,12 @@ class ProductionBatchSerializer(serializers.ModelSerializer):
             "orders_snapshot",
             "orders_snapshot_captured_at",
             "orders_count",
+            "has_disabled_items",
+            "has_disabled_products",
             "has_disabled_ingredients",
+            "disabled_product_count",
             "disabled_ingredient_count",
+            "has_only_expired_stock",
         ]
         read_only_fields = [
             "id",
@@ -446,8 +493,12 @@ class ProductionBatchSerializer(serializers.ModelSerializer):
             "orders_snapshot",
             "orders_snapshot_captured_at",
             "orders_count",
+            "has_disabled_items",
+            "has_disabled_products",
             "has_disabled_ingredients",
+            "disabled_product_count",
             "disabled_ingredient_count",
+            "has_only_expired_stock",
         ]
 
     def get_orders_count(self, obj):
@@ -473,14 +524,42 @@ class ProductionBatchSerializer(serializers.ModelSerializer):
                 return {}
         return {}
 
-    def get_has_disabled_ingredients(self, obj):
+    def get_has_disabled_items(self, obj):
         payload = self._requirements_payload(obj)
         disabled = payload.get("disabled", [])
         return bool(disabled)
 
+    def get_has_disabled_products(self, obj):
+        payload = self._requirements_payload(obj)
+        disabled = payload.get("disabled", [])
+        return any(item.get("reason") == "product_disabled" for item in disabled)
+
+    def get_has_disabled_ingredients(self, obj):
+        payload = self._requirements_payload(obj)
+        disabled = payload.get("disabled", [])
+        return any(item.get("reason") in ("ingredient_disabled", "recipe_disabled") for item in disabled)
+
+    def get_disabled_product_count(self, obj):
+        payload = self._requirements_payload(obj)
+        disabled = payload.get("disabled", [])
+        unique_products = {
+            item.get("product") for item in disabled 
+            if item.get("reason") == "product_disabled" and item.get("product")
+        }
+        return len(unique_products)
+
     def get_disabled_ingredient_count(self, obj):
         payload = self._requirements_payload(obj)
-        return len(payload.get("disabled", []))
+        disabled = payload.get("disabled", [])
+        unique_ingredients = {
+            item.get("ingredient") for item in disabled 
+            if item.get("ingredient") and item.get("reason") in ("ingredient_disabled", "recipe_disabled")
+        }
+        return len(unique_ingredients)
+
+    def get_has_only_expired_stock(self, obj):
+        payload = self._requirements_payload(obj)
+        return payload.get("has_only_expired_stock", False)
 
 
 class IngredientConsumptionSerializer(serializers.ModelSerializer):

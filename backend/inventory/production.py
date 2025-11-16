@@ -73,10 +73,23 @@ class BatchRequirements:
     shortages: List[IngredientRequirement]
     disabled: List[Dict]
     warnings: List[str]
+    has_only_expired_stock: bool = False
 
     @property
     def can_produce(self) -> bool:
+        # Cannot produce if there are shortages
+        # Disabled items are handled separately (ingredients can be overridden, products cannot)
         return not self.shortages
+    
+    @property
+    def has_disabled_products(self) -> bool:
+        """Check if there are any disabled products in the batch."""
+        return any(item.get("reason") == "product_disabled" for item in self.disabled)
+    
+    @property
+    def has_disabled_ingredients(self) -> bool:
+        """Check if there are any disabled ingredients in the batch."""
+        return any(item.get("reason") in ("ingredient_disabled", "recipe_disabled") for item in self.disabled)
 
 
 class ProductionService:
@@ -141,8 +154,32 @@ class ProductionService:
             if entry["ingredient_id"] in shortage_ids:
                 shortages_payload.append(entry)
 
+        # Track which orders have disabled products/ingredients for frontend indicators
+        orders_with_disabled_products = set()
+        orders_with_disabled_ingredients = set()
+        
         for detail in requirements.disabled:
-            key = (detail.get("ingredient_id"), detail.get("reason"))
+            order_id = detail.get("order_id")
+            if not order_id:
+                continue
+                
+            # Track order_id for frontend indicators
+            if detail.get("reason") == "product_disabled":
+                orders_with_disabled_products.add(order_id)
+            else:
+                # Track orders with disabled ingredients
+                orders_with_disabled_ingredients.add(order_id)
+            
+            # Deduplicate disabled items
+            # For products, use (product_id, order_id) as key to show all instances per order
+            # For ingredients, use (ingredient_id, product_id, order_id, reason) as key to show all instances
+            # This ensures we show disabled ingredients from different products/orders separately
+            if detail.get("reason") == "product_disabled":
+                key = (detail.get("product_id"), detail.get("order_id"), detail.get("reason"))
+            else:
+                # Include product_id and order_id to show all instances of disabled ingredients
+                key = (detail.get("ingredient_id"), detail.get("product_id"), detail.get("order_id"), detail.get("reason"))
+            
             if key in seen_disabled:
                 continue
             seen_disabled.add(key)
@@ -154,6 +191,9 @@ class ProductionService:
             "disabled": disabled_payload,
             "warnings": requirements.warnings,
             "requires_disabled_override": bool(disabled_payload),
+            "orders_with_disabled_products": list(orders_with_disabled_products),
+            "orders_with_disabled_ingredients": list(orders_with_disabled_ingredients),
+            "has_only_expired_stock": getattr(requirements, "has_only_expired_stock", False),
             "generated_at": (timestamp or timezone.now()).isoformat(),
         }
         if status:
@@ -311,6 +351,7 @@ class ProductionService:
             Order.objects.filter(production_batch=batch)
             .select_related("batch_assignment")
             .prefetch_related(
+                "items__product",
                 "items__product__product_ingredients__ingredient",
             )
         )
@@ -351,6 +392,23 @@ class ProductionService:
                     continue
                 
                 product = item.product
+                
+                # Check if product is disabled (Inactive status)
+                product_disabled = getattr(product, "status", "Active") == "Inactive"
+                if product_disabled:
+                    disabled_details.append(
+                        {
+                            "ingredient_id": None,
+                            "ingredient": None,
+                            "product": product.name,
+                            "product_id": product.id,
+                            "order_id": order.id,
+                            "reason": "product_disabled",
+                        }
+                    )
+                    # Skip processing ingredients for disabled products
+                    continue
+                
                 for recipe in product.product_ingredients.all():
                     if recipe.quantity is None:
                         continue
@@ -380,7 +438,7 @@ class ProductionService:
 
         if not ingredient_totals:
             logger.warning(f"Batch {batch.id} has no ingredient requirements calculated (empty totals)")
-            return BatchRequirements(requirements=[], shortages=[], disabled=disabled_details, warnings=warnings)
+            return BatchRequirements(requirements=[], shortages=[], disabled=disabled_details, warnings=warnings, has_only_expired_stock=False)
 
         ingredient_ids = list(ingredient_totals.keys())
 
@@ -392,32 +450,47 @@ class ProductionService:
 
         lots_map: Dict[int, List[IngredientLot]] = defaultdict(list)
         available_map: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        expired_only_map: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
 
         for lot in lot_queryset:
-            if lot.expiry_date and lot.expiry_date < today_local:
-                continue
             available = Decimal(lot.current_quantity or 0)
             if available <= 0:
                 continue
-            available_map[lot.ingredient_id] += available
-            lots_map[lot.ingredient_id].append(
-                IngredientLot(
-                    batch_id=lot.id,
-                    available_quantity=available,
-                    expiry_date=str(lot.expiry_date) if lot.expiry_date else None,
-                    received_date=lot.received_date.isoformat() if lot.received_date else None,
+            
+            # Check if expired
+            is_expired = lot.expiry_date and lot.expiry_date < today_local
+            
+            if is_expired:
+                # Track expired stock separately
+                expired_only_map[lot.ingredient_id] += available
+            else:
+                # Only count non-expired stock as available
+                available_map[lot.ingredient_id] += available
+                lots_map[lot.ingredient_id].append(
+                    IngredientLot(
+                        batch_id=lot.id,
+                        available_quantity=available,
+                        expiry_date=str(lot.expiry_date) if lot.expiry_date else None,
+                        received_date=lot.received_date.isoformat() if lot.received_date else None,
+                    )
                 )
-            )
 
         requirements: List[IngredientRequirement] = []
         shortages: List[IngredientRequirement] = []
+        has_only_expired_stock = False
 
         for ingredient_id, required in ingredient_totals.items():
             ingredient = ingredient_objs.get(ingredient_id) or Ingredient.objects.get(pk=ingredient_id)
             available = available_map.get(ingredient_id, Decimal("0"))
+            expired_available = expired_only_map.get(ingredient_id, Decimal("0"))
             shortage = required - available
             shortage = shortage if shortage > 0 else Decimal("0")
             lots = lots_map.get(ingredient_id, [])
+            
+            # Check if this ingredient has a shortage but has expired stock available
+            if shortage > 0 and expired_available > 0:
+                has_only_expired_stock = True
+            
             requirement = IngredientRequirement(
                 ingredient=ingredient,
                 required_quantity=required,
@@ -434,6 +507,7 @@ class ProductionService:
             shortages=shortages,
             disabled=disabled_details,
             warnings=warnings,
+            has_only_expired_stock=has_only_expired_stock,
         )
 
     @transaction.atomic
@@ -452,8 +526,19 @@ class ProductionService:
         snapshot_time = timezone.now()
         requirements = self.calculate_requirements(batch)
 
-        if requirements.disabled and not allow_disabled:
-            raise DisabledIngredientError(requirements.disabled, requirements)
+        # Check for disabled products - these cannot be overridden
+        disabled_products = [item for item in requirements.disabled if item.get("reason") == "product_disabled"]
+        if disabled_products:
+            product_names = [item.get("product", "Unknown") for item in disabled_products]
+            raise ProductionError(
+                f"Cannot produce batch with disabled products: {', '.join(product_names)}. "
+                "Please remove these products from orders or reactivate them before production."
+            )
+
+        # Check for disabled ingredients - these can be overridden with allow_disabled flag
+        disabled_ingredients = [item for item in requirements.disabled if item.get("reason") != "product_disabled"]
+        if disabled_ingredients and not allow_disabled:
+            raise DisabledIngredientError(disabled_ingredients, requirements)
         if requirements.shortages:
             raise InsufficientStockError(requirements.shortages, requirements)
 
@@ -622,13 +707,63 @@ class ProductionService:
         return batch
 
     def get_or_create_next_batch(self, batch: ProductionBatch, user: Optional[User] = None) -> ProductionBatch:
+        """
+        Get or create the next pending batch after the given batch.
+        Skips any produced or cancelled batches to ensure orders only move to pending batches.
+        """
         reference = batch.window_end or batch.window_start
         if reference is None:
             reference = timezone.now()
         if timezone.is_naive(reference):
             reference = timezone.make_aware(reference, timezone=timezone.get_default_timezone())
-        reference = reference + timezone.timedelta(minutes=1)
-        return self.get_or_create_batch_for_reference(reference, user=user)
+        
+        # Start searching from 1 minute after the current batch's end time
+        search_reference = reference + timezone.timedelta(minutes=1)
+        max_iterations = 365  # Prevent infinite loop - search up to 1 year ahead
+        iteration = 0
+        
+        while iteration < max_iterations:
+            candidate_batch = self.get_or_create_batch_for_reference(search_reference, user=user)
+            
+            # Only return if the batch is pending
+            if candidate_batch.status == ProductionBatch.STATUS_PENDING:
+                return candidate_batch
+            
+            # If batch exists but is not pending, move to next window
+            # Calculate next window start and end times
+            _, window_end = self.calculate_window_for(search_reference)
+            # Move to 1 minute after this window's end
+            search_reference = window_end + timezone.timedelta(minutes=1)
+            iteration += 1
+        
+        # Fallback: if we couldn't find a pending batch, return the last candidate
+        # This should rarely happen, but prevents infinite loops
+        logger.warning(f"Could not find pending batch after {max_iterations} iterations. Returning last candidate.")
+        return candidate_batch
+
+    def get_previous_batch(self, batch: ProductionBatch) -> Optional[ProductionBatch]:
+        """
+        Get the most recent pending batch before the given batch.
+        Returns None if no previous pending batch exists.
+        """
+        reference = batch.window_start
+        if reference is None:
+            return None
+        if timezone.is_naive(reference):
+            reference = timezone.make_aware(reference, timezone=timezone.get_default_timezone())
+        
+        # Find the most recent pending batch that ends before this batch starts
+        # Order by window_end descending to get the most recent one
+        previous_batch = (
+            ProductionBatch.objects.filter(
+                window_end__lt=reference,
+                status=ProductionBatch.STATUS_PENDING
+            )
+            .order_by("-window_end")
+            .first()
+        )
+        
+        return previous_batch
 
 
 __all__ = [

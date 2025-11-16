@@ -1399,6 +1399,49 @@ class ProductionBatchViewSet(viewsets.ModelViewSet):
             "original_requirements": original_requirements,
         }, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["post"], url_path="move-order-previous")
+    def move_order_previous(self, request, pk=None):
+        batch = self.get_object()
+        order_id = request.data.get("order_id")
+        if not order_id:
+            return Response({"detail": "order_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        order = get_object_or_404(Order, pk=order_id)
+        service = ProductionService()
+        
+        # Find the previous batch
+        previous_batch = service.get_previous_batch(batch)
+        if not previous_batch:
+            return Response(
+                {"detail": "No previous pending batch found. Cannot move order back."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        original_batch = batch
+        service.move_order(order, previous_batch, user=request.user)
+
+        # Build response payload with updated requirements & orders for previous batch
+        previous_requirements_obj = service.calculate_requirements(previous_batch)
+        previous_requirements = service.build_requirements_payload(previous_requirements_obj)
+        previous_assignments = previous_batch.batch_orders.select_related("order", "order__user", "assigned_by").order_by("sequence", "order_id")
+        assignments_serializer = ProductionBatchOrderSerializer(previous_assignments, many=True)
+        assignment_serializer = ProductionBatchOrderSerializer(order.batch_assignment)
+
+        # Include original batch updated requirements
+        original_requirements = None
+        if original_batch.id != previous_batch.id:
+            orig_req_obj = service.calculate_requirements(original_batch)
+            original_requirements = service.build_requirements_payload(orig_req_obj)
+
+        return Response({
+            "target_batch_id": previous_batch.id,
+            "assignment": assignment_serializer.data,
+            "orders": assignments_serializer.data,
+            "requirements": previous_requirements,
+            "original_batch_id": original_batch.id,
+            "original_requirements": original_requirements,
+        }, status=status.HTTP_200_OK)
+
 
 class ProductionBatchOrderViewSet(viewsets.ModelViewSet):
     queryset = ProductionBatchOrder.objects.select_related("batch", "order", "assigned_by").order_by("batch_id", "sequence")
