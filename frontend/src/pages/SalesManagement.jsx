@@ -132,12 +132,7 @@ export default function SalesManagement() {
   };
 
   const filteredSales = useMemo(() => {
-
-    console.log(salesData.map(s => s.payment_status));
     return salesData.filter(sale => {
-      // Only show paid sales unless the filter is set to something else
-      if (statusFilter === "all" && sale.payment_status !== "Paid") return false;
-
       const matchesSearch = !searchTerm || 
         sale.order_details?.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         sale.payment_reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -157,6 +152,8 @@ export default function SalesManagement() {
     switch (status) {
       case "Paid":
         return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case "Unpaid":
+        return <XCircle className="h-4 w-4 text-red-600" />;
       case "Pending":
         return <Clock className="h-4 w-4 text-yellow-600" />;
       case "Failed":
@@ -170,6 +167,8 @@ export default function SalesManagement() {
     switch (status) {
       case "Paid":
         return "bg-green-100 text-green-700 border-green-200";
+      case "Unpaid":
+        return "bg-red-100 text-red-700 border-red-200";
       case "Pending":
         return "bg-yellow-100 text-yellow-700 border-yellow-200";
       case "Failed":
@@ -437,6 +436,7 @@ export default function SalesManagement() {
                 >
                   <option value="all">All Status</option>
                   <option value="Paid">Paid</option>
+                  <option value="Unpaid">Unpaid</option>
                   <option value="Pending">Pending</option>
                   <option value="Failed">Failed</option>
                   <option value="Refunded">Refunded</option>
