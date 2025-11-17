@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { 
   Search, 
   Download, 
@@ -82,18 +82,14 @@ export default function SalesManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState("7");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [paymentMethodFilter, setPaymentMethodFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedSale, setSelectedSale] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
 
-  useEffect(() => {
-    loadSalesData();
-    loadAnalyticsData();
-    loadSummaryData();
-  }, [dateFilter]);
-
-  const loadSalesData = async () => {
+  const loadSalesData = useCallback(async () => {
     try {
       const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/sales/`);
       if (response.ok) {
@@ -103,9 +99,9 @@ export default function SalesManagement() {
     } catch (error) {
       console.error("Error loading sales data:", error);
     }
-  };
+  }, []);
 
-  const loadAnalyticsData = async () => {
+  const loadAnalyticsData = useCallback(async () => {
     try {
       const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/sales/analytics/?days=${dateFilter}`);
       if (response.ok) {
@@ -115,9 +111,9 @@ export default function SalesManagement() {
     } catch (error) {
       console.error("Error loading analytics data:", error);
     }
-  };
+  }, [dateFilter]);
 
-  const loadSummaryData = async () => {
+  const loadSummaryData = useCallback(async () => {
     try {
       const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/sales/summary/?days=${dateFilter}`);
       if (response.ok) {
@@ -129,7 +125,13 @@ export default function SalesManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateFilter]);
+
+  useEffect(() => {
+    loadSalesData();
+    loadAnalyticsData();
+    loadSummaryData();
+  }, [loadSalesData, loadAnalyticsData, loadSummaryData]);
 
   const filteredSales = useMemo(() => {
     return salesData.filter(sale => {
@@ -144,9 +146,32 @@ export default function SalesManagement() {
       const matchesStatus = statusFilter === "all" || 
         sale.payment_status === statusFilter;
       
-      return matchesSearch && matchesPaymentMethod && matchesStatus;
+      // Date range filtering
+      let matchesDateRange = true;
+      if (startDate || endDate) {
+        const saleDate = new Date(sale.payment_date);
+        saleDate.setHours(0, 0, 0, 0);
+        
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (saleDate < start) {
+            matchesDateRange = false;
+          }
+        }
+        
+        if (endDate && matchesDateRange) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (saleDate > end) {
+            matchesDateRange = false;
+          }
+        }
+      }
+      
+      return matchesSearch && matchesPaymentMethod && matchesStatus && matchesDateRange;
     });
-  }, [salesData, searchTerm, paymentMethodFilter, statusFilter]);
+  }, [salesData, searchTerm, paymentMethodFilter, statusFilter, startDate, endDate]);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -268,6 +293,19 @@ export default function SalesManagement() {
         {/* Overview Tab */}
         {activeTab === "overview" && (
           <div className="space-y-8">
+            {/* Date Filter for Overview/Analytics */}
+            <div className="flex justify-end">
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              >
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last year</option>
+              </select>
+            </div>
             {/* Summary Cards */}
             <div className="grid md:grid-cols-4 gap-6">
               <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -339,6 +377,19 @@ export default function SalesManagement() {
         {/* Analytics Tab */}
         {activeTab === "analytics" && analyticsData && (
           <div className="space-y-8">
+            {/* Date Filter for Overview/Analytics */}
+            <div className="flex justify-end">
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              >
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last year</option>
+              </select>
+            </div>
             {/* Daily Trend Chart */}
             {analyticsData.daily_trend && analyticsData.daily_trend.length > 0 && (
               <SimpleLineChart
@@ -428,16 +479,22 @@ export default function SalesManagement() {
                   <option value="Paid">Paid</option>
                   <option value="Unpaid">Unpaid</option>
                 </select>
-                <select
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-                >
-                  <option value="7">Last 7 days</option>
-                  <option value="30">Last 30 days</option>
-                  <option value="90">Last 90 days</option>
-                  <option value="365">Last year</option>
-                </select>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 whitespace-nowrap">Date Range:</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                  <span className="text-gray-400">to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="px-3 py-2 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
               </div>
             </div>
 
