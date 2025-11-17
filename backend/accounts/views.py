@@ -1,22 +1,19 @@
-from django.shortcuts import render
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.generics import ListAPIView
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
-from .serializers import UserSerializer
+from .serializers import UserSerializer, UserProfileUpdateSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
+from rest_framework.exceptions import PermissionDenied
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils import timezone
 from rest_framework import serializers
-
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
 
 User = get_user_model()
 
@@ -122,6 +119,23 @@ class UserViewSet(ModelViewSet):
     def me(self, request):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+    @action(detail=False, methods=["put", "patch"], permission_classes=[IsAuthenticated])
+    def update_profile(self, request):
+        """
+        Allow users to update their own profile.
+        Role and proof_of_business cannot be changed through this endpoint.
+        """
+        user = request.user
+        serializer = UserProfileUpdateSerializer(user, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            serializer.save()
+            # Return full user data using the main serializer
+            response_serializer = UserSerializer(user)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=["post"])
     def promote(self, request, pk=None):

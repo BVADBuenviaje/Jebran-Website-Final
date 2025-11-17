@@ -40,3 +40,27 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for users to update their own profile.
+    Excludes role and proof_of_business from being editable.
+    """
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "full_name", "email", "contact_number",
+            "shop_name", "shop_address", "password"
+        ]
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+        for k, v in validated_data.items():
+            setattr(instance, k, v)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance

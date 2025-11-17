@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { 
   Search, 
   Download, 
-  TrendingUp, 
+  TrendingUp,
   DollarSign, 
   ShoppingCart, 
   Calendar,
@@ -21,59 +21,104 @@ import {
 import { fetchWithAuth } from "../utils/auth";
 
 // Chart components (simple implementation without external libraries)
-const SimpleBarChart = ({ data, title }) => {
-  const maxValue = Math.max(...data.map(d => d.value));
+const SimpleBarChart = ({ data, title, showUnpaid = false }) => {
+  // Calculate max value considering both paid and unpaid if showUnpaid is true
+  const maxValue = showUnpaid 
+    ? Math.max(...data.map(d => (d.value || 0) + (d.unpaidValue || 0)), 1)
+    : Math.max(...data.map(d => d.value || 0), 1);
   
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+      {showUnpaid && (
+        <div className="flex gap-4 mb-4 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-blue-600 rounded"></div>
+            <span className="text-gray-600">Paid</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-red-600 rounded"></div>
+            <span className="text-gray-600">Unpaid</span>
+          </div>
+        </div>
+      )}
       <div className="space-y-3">
-        {data.map((item, index) => (
+        {data.map((item, index) => {
+          const paidValue = item.value || 0;
+          const unpaidValue = item.unpaidValue || 0;
+          const totalValue = paidValue + unpaidValue;
+          
+          // Calculate total bar width as percentage of max value
+          const totalBarWidth = maxValue > 0 ? (totalValue / maxValue) * 100 : 0;
+          
+          // Calculate proportions within the bar
+          const paidProportion = totalValue > 0 ? (paidValue / totalValue) : 0;
+          const unpaidProportion = totalValue > 0 ? (unpaidValue / totalValue) : 0;
+          
+          // Calculate actual widths within the total bar
+          const paidWidth = totalBarWidth * paidProportion;
+          const unpaidWidth = totalBarWidth * unpaidProportion;
+          
+          return (
           <div key={index} className="flex items-center justify-between">
             <span className="text-sm text-gray-600 w-20 truncate">{item.label}</span>
             <div className="flex-1 mx-3">
-              <div className="bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(item.value / maxValue) * 100}%` }}
-                />
+                <div className="bg-gray-200 rounded-full h-6 relative overflow-hidden" style={{ width: '100%' }}>
+                  {/* Container for the actual bar content - scales to totalBarWidth */}
+                  <div 
+                    className="h-full relative"
+                    style={{ width: `${totalBarWidth}%` }}
+                  >
+                    {/* Paid bar (blue) - fills from left */}
+                    {paidValue > 0 && (
+                      <div 
+                        className="bg-blue-600 h-full absolute left-0 top-0 rounded-l transition-all duration-300 flex items-center justify-center"
+                        style={{ width: `${paidProportion * 100}%` }}
+                        title={`Paid: ₱${paidValue.toLocaleString()}`}
+                      >
+                        {totalBarWidth * paidProportion > 15 && (
+                          <span className="text-white text-xs font-medium">₱{paidValue.toLocaleString()}</span>
+                        )}
+                      </div>
+                    )}
+                    {/* Unpaid bar (red) - fills after paid */}
+                    {showUnpaid && unpaidValue > 0 && (
+                      <div 
+                        className="bg-red-600 h-full absolute left-0 top-0 transition-all duration-300 flex items-center justify-center rounded-r"
+                        style={{ 
+                          width: `${unpaidProportion * 100}%`,
+                          left: `${paidProportion * 100}%`
+                        }}
+                        title={`Unpaid: ₱${unpaidValue.toLocaleString()}`}
+                      >
+                        {totalBarWidth * unpaidProportion > 15 && (
+                          <span className="text-white text-xs font-medium">₱{unpaidValue.toLocaleString()}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="text-sm font-medium text-gray-900 w-32 text-right">
+                {showUnpaid ? (
+                  <div className="flex flex-col items-end">
+                    <span className="text-blue-600">₱{paidValue.toLocaleString()}</span>
+                    {unpaidValue > 0 && (
+                      <span className="text-red-600 text-xs">₱{unpaidValue.toLocaleString()}</span>
+                    )}
+                  </div>
+                ) : (
+                  <span>₱{paidValue.toLocaleString()}</span>
+                )}
               </div>
             </div>
-            <span className="text-sm font-medium text-gray-900 w-16 text-right">
-              ₱{item.value.toLocaleString()}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 };
 
-const SimpleLineChart = ({ data, title }) => {
-  const maxValue = Math.max(...data.map(d => d.value));
-  const minValue = Math.min(...data.map(d => d.value));
-  const range = maxValue - minValue || 1;
-  
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      <div className="h-48 flex items-end justify-between space-x-1">
-        {data.map((item, index) => (
-          <div key={index} className="flex flex-col items-center flex-1">
-            <div 
-              className="bg-blue-600 w-full rounded-t transition-all duration-300 hover:bg-blue-700"
-              style={{ height: `${((item.value - minValue) / range) * 100}%` }}
-              title={`${item.label}: ₱${item.value.toLocaleString()}`}
-            />
-            <span className="text-xs text-gray-500 mt-2 transform -rotate-45 origin-left">
-              {item.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 export default function SalesManagement() {
   const [salesData, setSalesData] = useState([]);
@@ -88,6 +133,15 @@ export default function SalesManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedSale, setSelectedSale] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  
+  // Reports state
+  const [reportData, setReportData] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportType, setReportType] = useState("sales");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [customPaymentMethod, setCustomPaymentMethod] = useState("");
+  const [customPaymentStatus, setCustomPaymentStatus] = useState("");
 
   const loadSalesData = useCallback(async () => {
     try {
@@ -205,39 +259,376 @@ export default function SalesManagement() {
     }
   };
 
-  const exportSalesReport = async () => {
+  const generateReport = async (type, startDate = null, endDate = null, paymentMethod = null, paymentStatus = null) => {
+    setReportLoading(true);
     try {
-      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/sales/reports/`);
+      const params = new URLSearchParams();
+      params.append("report_type", type);
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      if (paymentMethod) params.append("payment_method", paymentMethod);
+      if (paymentStatus) params.append("payment_status", paymentStatus);
+      
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/sales/reports/?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
-        
-        // Create CSV content
-        const csvContent = [
-          ["Sale ID", "Order ID", "Customer", "Payment Date", "Payment Method", "Status", "Amount", "Reference"],
-          ...data.report_data.map(sale => [
-            sale.sale_id,
-            sale.order_id,
-            sale.customer,
-            new Date(sale.payment_date).toLocaleDateString(),
-            sale.payment_method,
-            sale.payment_status,
-            sale.total_amount,
-            sale.payment_reference || ""
-          ])
-        ].map(row => row.join(",")).join("\n");
-        
-        // Download CSV
-        const blob = new Blob([csvContent], { type: "text/csv" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `sales-report-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+        setReportData(data);
+      } else {
+        const errorData = await response.json().catch(() => ({ detail: "Failed to generate report" }));
+        alert(`Failed to generate report: ${errorData.detail || "Unknown error"}`);
       }
     } catch (error) {
-      console.error("Error exporting report:", error);
-      alert("Failed to export report");
+      console.error("Error generating report:", error);
+      alert("Failed to generate report. Please try again.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const exportToCSV = (data, filename) => {
+    if (!data || !data.report_data || data.report_data.length === 0) {
+      alert("No data to export");
+      return;
+    }
+
+    let csvContent = "";
+    
+    if (data.report_type === "sales") {
+      // Sales report CSV
+      csvContent = [
+        ["Sale ID", "Order ID", "Customer", "Payment Date", "Payment Method", "Status", "Amount", "Reference", "Handled By"],
+        ...data.report_data.map(sale => [
+          sale.sale_id,
+          sale.order_id || "",
+          sale.customer || "",
+          sale.payment_date ? new Date(sale.payment_date).toLocaleDateString() : "",
+          sale.payment_method || "",
+          sale.payment_status || "",
+          sale.total_amount || 0,
+          sale.payment_reference || "",
+          sale.handled_by || ""
+        ])
+      ].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    } else if (data.report_type === "products") {
+      // Product performance CSV
+      csvContent = [
+        ["Product ID", "Product Name", "Total Quantity", "Total Revenue", "Order Count", "Average Price"],
+        ...data.report_data.map(product => [
+          product.product_id || "",
+          product.product_name || "",
+          product.total_quantity || 0,
+          product.total_revenue || 0,
+          product.order_count || 0,
+          product.average_price ? product.average_price.toFixed(2) : 0
+        ])
+      ].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    } else if (data.report_type === "monthly") {
+      // Monthly summary CSV
+      csvContent = [
+        ["Month", "Total Revenue", "Total Sales", "Paid Count", "Unpaid Count", "Average Sale"],
+        ...data.report_data.map(month => [
+          month.month_name || month.month || "",
+          month.total_revenue || 0,
+          month.total_sales || 0,
+          month.paid_count || 0,
+          month.unpaid_count || 0,
+          month.average_sale ? month.average_sale.toFixed(2) : 0
+        ])
+      ].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    }
+    
+    // Download CSV
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || `${data.report_type}-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleQuickReport = (type) => {
+    const today = new Date();
+    let startDate, endDate;
+    
+    if (type === "monthly") {
+      // Last 12 months
+      endDate = today.toISOString().split('T')[0];
+      const start = new Date(today);
+      start.setMonth(start.getMonth() - 12);
+      startDate = start.toISOString().split('T')[0];
+      generateReport("monthly", startDate, endDate);
+    } else if (type === "products") {
+      // Last 30 days for products
+      endDate = today.toISOString().split('T')[0];
+      const start = new Date(today);
+      start.setDate(start.getDate() - 30);
+      startDate = start.toISOString().split('T')[0];
+      generateReport("products", startDate, endDate);
+    } else {
+      // Complete sales report - all time
+      generateReport("sales");
+    }
+  };
+
+  const handleCustomReport = () => {
+    if (!customStartDate || !customEndDate) {
+      alert("Please select both start and end dates");
+      return;
+    }
+    generateReport(reportType, customStartDate, customEndDate, customPaymentMethod || null, customPaymentStatus || null);
+  };
+
+  const generateReceipt = async (saleId) => {
+    try {
+      const response = await fetchWithAuth(`${import.meta.env.VITE_INVENTORY_URL}/sales/${saleId}/receipt/`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch receipt data");
+      }
+      const receiptData = await response.json();
+      
+      // Create receipt HTML
+      const receiptHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Official Receipt - ${receiptData.receipt_number}</title>
+          <style>
+            @media print {
+              @page {
+                size: A4;
+                margin: 20mm;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+              }
+            }
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'Arial', sans-serif;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 40px;
+              background: white;
+              color: #000;
+            }
+            .receipt-header {
+              text-align: center;
+              border-bottom: 3px solid #000;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .receipt-header h1 {
+              font-size: 28px;
+              font-weight: bold;
+              margin-bottom: 10px;
+              text-transform: uppercase;
+              letter-spacing: 2px;
+            }
+            .receipt-header p {
+              font-size: 14px;
+              color: #666;
+            }
+            .receipt-info {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+            .info-section h3 {
+              font-size: 12px;
+              text-transform: uppercase;
+              color: #666;
+              margin-bottom: 8px;
+              letter-spacing: 1px;
+            }
+            .info-section p {
+              font-size: 14px;
+              margin-bottom: 5px;
+            }
+            .receipt-number {
+              text-align: right;
+              font-size: 18px;
+              font-weight: bold;
+              margin-bottom: 20px;
+            }
+            .items-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+            }
+            .items-table thead {
+              background: #000;
+              color: #fff;
+            }
+            .items-table th {
+              padding: 12px;
+              text-align: left;
+              font-size: 12px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .items-table td {
+              padding: 12px;
+              border-bottom: 1px solid #ddd;
+              font-size: 14px;
+            }
+            .items-table tbody tr:last-child td {
+              border-bottom: 2px solid #000;
+            }
+            .text-right {
+              text-align: right;
+            }
+            .totals {
+              margin-top: 20px;
+              margin-left: auto;
+              width: 300px;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 8px 0;
+              font-size: 14px;
+            }
+            .total-row.final {
+              font-size: 20px;
+              font-weight: bold;
+              border-top: 2px solid #000;
+              border-bottom: 2px solid #000;
+              padding: 15px 0;
+              margin-top: 10px;
+            }
+            .payment-info {
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #ddd;
+            }
+            .payment-info p {
+              margin-bottom: 8px;
+              font-size: 14px;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+              border-top: 1px solid #ddd;
+              padding-top: 20px;
+            }
+            .status-badge {
+              display: inline-block;
+              padding: 4px 12px;
+              border-radius: 4px;
+              font-size: 12px;
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+            .status-paid {
+              background: #10b981;
+              color: white;
+            }
+            .status-unpaid {
+              background: #ef4444;
+              color: white;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-header">
+            <h1>Official Receipt</h1>
+            <p>Jebran Miki</p>
+            <p>Thank you for your purchase!</p>
+          </div>
+          
+          <div class="receipt-number">
+            Receipt No: ${receiptData.receipt_number}
+          </div>
+          
+          <div class="receipt-info">
+            <div class="info-section">
+              <h3>Customer Information</h3>
+              <p><strong>Name:</strong> ${receiptData.customer.name}</p>
+              ${receiptData.customer.email ? `<p><strong>Email:</strong> ${receiptData.customer.email}</p>` : ''}
+              <p><strong>Date:</strong> ${receiptData.date_formatted}</p>
+            </div>
+            <div class="info-section">
+              <h3>Transaction Details</h3>
+              <p><strong>Sale ID:</strong> #${receiptData.sale_id}</p>
+              <p><strong>Order ID:</strong> #${receiptData.order_id}</p>
+              <p><strong>Status:</strong> <span class="status-badge ${receiptData.payment_status === 'Paid' ? 'status-paid' : 'status-unpaid'}">${receiptData.payment_status}</span></p>
+            </div>
+          </div>
+          
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Unit Price</th>
+                <th class="text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${receiptData.items.map(item => `
+                <tr>
+                  <td>${item.product_name}</td>
+                  <td class="text-right">${item.quantity}</td>
+                  <td class="text-right">₱${item.unit_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td class="text-right">₱${item.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="totals">
+            <div class="total-row">
+              <span>Subtotal:</span>
+              <span>₱${receiptData.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div class="total-row final">
+              <span>Total Amount:</span>
+              <span>₱${receiptData.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+          
+          <div class="payment-info">
+            <p><strong>Payment Method:</strong> ${receiptData.payment_method}</p>
+            ${receiptData.payment_reference ? `<p><strong>Payment Reference:</strong> ${receiptData.payment_reference}</p>` : ''}
+            <p><strong>Processed By:</strong> ${receiptData.handled_by}</p>
+          </div>
+          
+          <div class="footer">
+            <p>This is an official receipt for your records.</p>
+            <p>For inquiries, please contact our customer service.</p>
+            <p style="margin-top: 10px;">Generated on ${new Date().toLocaleString()}</p>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      // Open print window
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(receiptHTML);
+      printWindow.document.close();
+      
+      // Wait for content to load, then trigger print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+        }, 250);
+      };
+      
+    } catch (error) {
+      console.error("Error generating receipt:", error);
+      alert("Failed to generate receipt. Please try again.");
     }
   };
 
@@ -269,7 +660,6 @@ export default function SalesManagement() {
             <nav className="-mb-px flex space-x-8">
               {[
                 { id: "overview", label: "Overview", icon: BarChart3 },
-                { id: "analytics", label: "Analytics", icon: TrendingUp },
                 { id: "sales", label: "Sales List", icon: FileText },
                 { id: "reports", label: "Reports", icon: PieChart }
               ].map(tab => (
@@ -331,7 +721,7 @@ export default function SalesManagement() {
                   </div>
                   <ShoppingCart className="h-8 w-8 text-blue-600" />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Completed transactions</p>
+                <p className="text-xs text-gray-500 mt-2">All transactions (paid + unpaid)</p>
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -339,12 +729,12 @@ export default function SalesManagement() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">Average Order</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      ₱{summaryData?.total_sales ? (summaryData.total_revenue / summaryData.total_sales).toFixed(0) : 0}
+                      ₱{summaryData?.average_order ? summaryData.average_order.toFixed(0) : 0}
                     </p>
                   </div>
                   <TrendingUp className="h-8 w-8 text-purple-600" />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Per transaction</p>
+                <p className="text-xs text-gray-500 mt-2">Per transaction (based on paid revenue)</p>
               </div>
 
               <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -366,9 +756,11 @@ export default function SalesManagement() {
               <SimpleBarChart
                 data={Object.entries(summaryData.by_method).map(([method, data]) => ({
                   label: method,
-                  value: data.revenue
+                  value: data.revenue || 0,
+                  unpaidValue: data.unpaid_revenue || 0
                 }))}
                 title="Revenue by Payment Method"
+                showUnpaid={true}
               />
             )}
           </div>
@@ -578,22 +970,25 @@ export default function SalesManagement() {
                   <h3 className="font-medium text-gray-900">Quick Reports</h3>
                   <div className="space-y-2">
                     <button 
-                      onClick={() => exportSalesReport()}
-                      className="w-full text-left px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+                      onClick={() => handleQuickReport("sales")}
+                      disabled={reportLoading}
+                      className="w-full text-left px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <FileText className="h-4 w-4" />
                       Complete Sales Report
                     </button>
                     <button 
-                      onClick={() => exportSalesReport()}
-                      className="w-full text-left px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+                      onClick={() => handleQuickReport("monthly")}
+                      disabled={reportLoading}
+                      className="w-full text-left px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Calendar className="h-4 w-4" />
                       Monthly Sales Summary
                     </button>
                     <button 
-                      onClick={() => exportSalesReport()}
-                      className="w-full text-left px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+                      onClick={() => handleQuickReport("products")}
+                      disabled={reportLoading}
+                      className="w-full text-left px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Package className="h-4 w-4" />
                       Product Performance Report
@@ -605,34 +1000,217 @@ export default function SalesManagement() {
                   <h3 className="font-medium text-gray-900">Custom Reports</h3>
                   <div className="space-y-3">
                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
+                      <select 
+                        value={reportType}
+                        onChange={(e) => setReportType(e.target.value)}
+                        className="w-full px-3 py-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      >
+                        <option value="sales">Sales Report</option>
+                        <option value="products">Product Performance</option>
+                        <option value="monthly">Monthly Summary</option>
+                      </select>
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
                       <div className="flex gap-2">
                         <input 
                           type="date" 
+                          value={customStartDate}
+                          onChange={(e) => setCustomStartDate(e.target.value)}
                           className="flex-1 px-3 py-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
                         />
                         <input 
                           type="date" 
+                          value={customEndDate}
+                          onChange={(e) => setCustomEndDate(e.target.value)}
                           className="flex-1 px-3 py-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
                         />
                       </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                      <select className="w-full px-3 py-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900">
+                      <select 
+                        value={customPaymentMethod}
+                        onChange={(e) => setCustomPaymentMethod(e.target.value)}
+                        className="w-full px-3 py-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      >
                         <option value="">All Methods</option>
                         <option value="COD">Cash on Delivery</option>
-                        <option value="Online">Online Payment</option>
                         <option value="GCash">GCash</option>
                       </select>
                     </div>
-                    <button className="w-full px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 text-sm">
-                      Generate Custom Report
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+                      <select 
+                        value={customPaymentStatus}
+                        onChange={(e) => setCustomPaymentStatus(e.target.value)}
+                        className="w-full px-3 py-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      >
+                        <option value="">All Status</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Unpaid">Unpaid</option>
+                      </select>
+                    </div>
+                    <button 
+                      onClick={handleCustomReport}
+                      disabled={reportLoading}
+                      className="w-full px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {reportLoading ? "Generating..." : "Generate Custom Report"}
                     </button>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Report Results */}
+            {reportLoading && (
+              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                <p className="text-gray-600">Generating report...</p>
+              </div>
+            )}
+
+            {reportData && !reportLoading && (
+              <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {reportData.report_type === "sales" && "Sales Report"}
+                      {reportData.report_type === "products" && "Product Performance Report"}
+                      {reportData.report_type === "monthly" && "Monthly Summary Report"}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {reportData.report_type === "sales" && `${reportData.report_data?.length || 0} sales found`}
+                      {reportData.report_type === "products" && `${reportData.total_products || 0} products found`}
+                      {reportData.report_type === "monthly" && `${reportData.total_months || 0} months found`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => exportToCSV(reportData)}
+                    className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 text-sm flex items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export CSV
+                  </button>
+                </div>
+
+                {/* Summary Statistics */}
+                {reportData.summary && (
+                  <div className="grid md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="text-sm text-gray-600">Total Revenue</p>
+                      <p className="text-xl font-bold text-gray-900">₱{reportData.summary.total_revenue?.toLocaleString() || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Sales</p>
+                      <p className="text-xl font-bold text-gray-900">{reportData.summary.total_sales || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Paid</p>
+                      <p className="text-xl font-bold text-green-600">{reportData.summary.paid_count || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Unpaid</p>
+                      <p className="text-xl font-bold text-red-600">{reportData.summary.unpaid_count || 0}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Report Data Table */}
+                <div className="overflow-x-auto">
+                  {reportData.report_type === "sales" && (
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Sale ID</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Order ID</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Customer</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Date</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Method</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Status</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Amount</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Reference</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {reportData.report_data?.map((sale, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-3">#{sale.sale_id}</td>
+                            <td className="px-4 py-3">#{sale.order_id}</td>
+                            <td className="px-4 py-3">{sale.customer}</td>
+                            <td className="px-4 py-3">{sale.payment_date ? new Date(sale.payment_date).toLocaleDateString() : "N/A"}</td>
+                            <td className="px-4 py-3">{sale.payment_method}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                sale.payment_status === "Paid" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                              }`}>
+                                {sale.payment_status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-medium">₱{sale.total_amount?.toLocaleString() || 0}</td>
+                            <td className="px-4 py-3 text-xs text-gray-500">{sale.payment_reference || "N/A"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {reportData.report_type === "products" && (
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Product Name</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Quantity Sold</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Total Revenue</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Orders</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Avg Price</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {reportData.report_data?.map((product, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium">{product.product_name}</td>
+                            <td className="px-4 py-3">{product.total_quantity}</td>
+                            <td className="px-4 py-3 font-medium">₱{product.total_revenue?.toLocaleString() || 0}</td>
+                            <td className="px-4 py-3">{product.order_count}</td>
+                            <td className="px-4 py-3">₱{product.average_price?.toFixed(2) || 0}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {reportData.report_type === "monthly" && (
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Month</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Total Revenue</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Total Sales</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Paid</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Unpaid</th>
+                          <th className="px-4 py-3 text-left font-medium text-gray-700">Avg Sale</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {reportData.report_data?.map((month, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium">{month.month_name}</td>
+                            <td className="px-4 py-3 font-medium">₱{month.total_revenue?.toLocaleString() || 0}</td>
+                            <td className="px-4 py-3">{month.total_sales}</td>
+                            <td className="px-4 py-3 text-green-600">{month.paid_count}</td>
+                            <td className="px-4 py-3 text-red-600">{month.unpaid_count}</td>
+                            <td className="px-4 py-3">₱{month.average_sale?.toFixed(2) || 0}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -734,7 +1312,14 @@ export default function SalesManagement() {
                   </div>
                 )}
               </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <button
+                  onClick={() => generateReceipt(selectedSale.id)}
+                  className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Receipt
+                </button>
                 <button 
                   onClick={() => setSelectedSale(null)}
                   className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"

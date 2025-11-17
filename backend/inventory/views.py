@@ -1077,46 +1077,365 @@ class SalesViewSet(viewsets.ReadOnlyModelViewSet):
     def summary(self, request):
         """
         Returns comprehensive sales summary for the last X days (default 7)
-        Only counts sales with payment_status='Paid' for revenue calculations
+        Includes both paid and unpaid sales by payment method
         """
         days = int(request.query_params.get("days", 7))
         since = timezone.now() - timedelta(days=days)
-        # Filter by date and only count Paid sales for revenue
+        # Filter by date
         qs = Sale.objects.filter(payment_date__gte=since)
         qs_paid = qs.filter(payment_status="Paid")
+        qs_unpaid = qs.filter(payment_status="Unpaid")
 
-        # Revenue calculations only include Paid sales
-        totals = qs_paid.aggregate(total_revenue=Sum("total_paid"), total_sales=Count("id"))
-        by_method = qs_paid.values("payment_method").annotate(
+        # Revenue calculations - only paid sales count for revenue
+        totals_paid = qs_paid.aggregate(total_revenue=Sum("total_paid"), paid_sales_count=Count("id"))
+        
+        # Total sales count includes both paid and unpaid
+        totals_all = qs.aggregate(total_sales=Count("id"))
+        
+        # Get paid sales by method
+        by_method_paid = qs_paid.values("payment_method").annotate(
+            count=Count("id"),
+            revenue=Sum("total_paid")
+        )
+        
+        # Get unpaid sales by method
+        by_method_unpaid = qs_unpaid.values("payment_method").annotate(
             count=Count("id"),
             revenue=Sum("total_paid")
         )
 
-        by_method_dict = {b["payment_method"]: {"count": b["count"], "revenue": float(b["revenue"] or 0)} for b in by_method}
+        # Combine paid and unpaid data by payment method
+        by_method_dict = {}
+        
+        # Add paid sales
+        for b in by_method_paid:
+            method = b["payment_method"]
+            by_method_dict[method] = {
+                "count": b["count"],
+                "revenue": float(b["revenue"] or 0),
+                "unpaid_revenue": 0.0,
+                "unpaid_count": 0
+            }
+        
+        # Add unpaid sales (merge with existing or create new)
+        for b in by_method_unpaid:
+            method = b["payment_method"]
+            if method in by_method_dict:
+                by_method_dict[method]["unpaid_revenue"] = float(b["revenue"] or 0)
+                by_method_dict[method]["unpaid_count"] = b["count"]
+            else:
+                by_method_dict[method] = {
+                    "count": 0,
+                    "revenue": 0.0,
+                    "unpaid_revenue": float(b["revenue"] or 0),
+                    "unpaid_count": b["count"]
+                }
+
+        total_revenue = float(totals_paid["total_revenue"] or 0)
+        total_sales_count = totals_all["total_sales"] or 0
+        average_order = total_revenue / total_sales_count if total_sales_count > 0 else 0
 
         return Response({
-            "total_revenue": float(totals["total_revenue"] or 0),
-            "total_sales": totals["total_sales"] or 0,
+            "total_revenue": total_revenue,
+            "total_sales": total_sales_count,
+            "average_order": average_order,
             "by_method": by_method_dict
         })
 
     @action(detail=False, methods=["get"])
     def analytics(self, request):
         """
-        Returns various analytics metrics for sales.
-        Only counts sales with payment_status='Paid' for revenue calculations
+        Returns comprehensive analytics metrics for sales.
+        Includes daily trends, product sales, and revenue breakdowns.
+        Only counts sales with payment_status='Paid' for revenue calculations.
         """
         days = int(request.query_params.get("days", 30))
         since = timezone.now() - timedelta(days=days)
+        
         # Only count Paid sales for revenue calculations
-        qs = Sale.objects.filter(payment_date__gte=since, payment_status="Paid")
+        qs = Sale.objects.filter(payment_date__gte=since, payment_status="Paid").select_related('order')
+        
+        # Overall totals
         totals = qs.aggregate(total_revenue=Sum("total_paid"), total_sales=Count("id"))
         avg_sale = totals["total_revenue"] / totals["total_sales"] if totals["total_sales"] else 0
+        
+        # Daily trend - group by date
+        from django.db.models.functions import TruncDate
+        daily_trend = qs.annotate(day=TruncDate('payment_date')).values('day').annotate(
+            revenue=Sum('total_paid'),
+            count=Count('id')
+        ).order_by('day')
+        
+        # Product sales - aggregate from OrderItems through Orders
+        from django.db.models import F
+        product_sales = OrderItem.objects.filter(
+            order__sale__payment_date__gte=since,
+            order__sale__payment_status="Paid"
+        ).values('product__name', 'product__id').annotate(
+            total_quantity=Sum('quantity'),
+            total_revenue=Sum(F('price_at_purchase') * F('quantity'))
+        ).order_by('-total_revenue')
+        
+        # Format product sales for pie chart
+        product_data = [
+            {
+                "product_id": item['product__id'],
+                "product_name": item['product__name'] or "Unknown",
+                "quantity": item['total_quantity'] or 0,
+                "revenue": float(item['total_revenue'] or 0)
+            }
+            for item in product_sales
+        ]
+        
+        # Format daily trend
+        daily_data = [
+            {
+                "day": item['day'].isoformat() if item['day'] else None,
+                "revenue": float(item['revenue'] or 0),
+                "count": item['count'] or 0
+            }
+            for item in daily_trend
+        ]
+        
         return Response({
             "total_revenue": float(totals["total_revenue"] or 0),
             "total_sales": totals["total_sales"] or 0,
-            "average_sale": float(avg_sale or 0)
+            "average_sale": float(avg_sale or 0),
+            "daily_trend": daily_data,
+            "product_sales": product_data
         })
+
+    @action(detail=False, methods=["get"])
+    def reports(self, request):
+        """
+        Returns detailed sales report data for export.
+        Supports date range filtering and payment method filtering.
+        Query params:
+        - start_date: YYYY-MM-DD format (optional)
+        - end_date: YYYY-MM-DD format (optional)
+        - payment_method: COD, GCash, etc. (optional)
+        - payment_status: Paid, Unpaid, etc. (optional)
+        - report_type: 'sales' (default), 'products', 'monthly'
+        """
+        from datetime import datetime, time
+        
+        # Get query parameters
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
+        payment_method = request.query_params.get("payment_method")
+        payment_status = request.query_params.get("payment_status")
+        report_type = request.query_params.get("report_type", "sales")
+        
+        # Build queryset
+        qs = Sale.objects.select_related('order', 'order__user').prefetch_related('order__items', 'order__items__product')
+        
+        # Apply date filters
+        if start_date_str:
+            try:
+                start_dt = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+                start_datetime = timezone.make_aware(
+                    datetime.combine(start_dt, time.min),
+                    timezone.get_default_timezone()
+                )
+                qs = qs.filter(payment_date__gte=start_datetime)
+            except ValueError:
+                pass
+        
+        if end_date_str:
+            try:
+                end_dt = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                end_datetime = timezone.make_aware(
+                    datetime.combine(end_dt, time.max),
+                    timezone.get_default_timezone()
+                )
+                qs = qs.filter(payment_date__lte=end_datetime)
+            except ValueError:
+                pass
+        
+        # Apply payment method filter
+        if payment_method:
+            qs = qs.filter(payment_method=payment_method)
+        
+        # Apply payment status filter
+        if payment_status:
+            qs = qs.filter(payment_status=payment_status)
+        
+        # Generate report based on type
+        if report_type == "products":
+            # Product performance report
+            from django.db.models import F
+            product_data = OrderItem.objects.filter(
+                order__sale__in=qs
+            ).values('product__name', 'product__id').annotate(
+                total_quantity=Sum('quantity'),
+                total_revenue=Sum(F('price_at_purchase') * F('quantity')),
+                order_count=Count('order', distinct=True)
+            ).order_by('-total_revenue')
+            
+            report_data = [
+                {
+                    "product_id": item['product__id'],
+                    "product_name": item['product__name'] or "Unknown",
+                    "total_quantity": item['total_quantity'] or 0,
+                    "total_revenue": float(item['total_revenue'] or 0),
+                    "order_count": item['order_count'] or 0,
+                    "average_price": float(item['total_revenue'] or 0) / (item['total_quantity'] or 1)
+                }
+                for item in product_data
+            ]
+            
+            return Response({
+                "report_type": "products",
+                "report_data": report_data,
+                "total_products": len(report_data),
+                "filters": {
+                    "start_date": start_date_str,
+                    "end_date": end_date_str,
+                    "payment_method": payment_method,
+                    "payment_status": payment_status
+                }
+            })
+        
+        elif report_type == "monthly":
+            # Monthly summary report
+            from django.db.models.functions import TruncMonth
+            monthly_data = qs.annotate(month=TruncMonth('payment_date')).values('month').annotate(
+                total_revenue=Sum('total_paid'),
+                total_sales=Count('id'),
+                paid_count=Count('id', filter=models.Q(payment_status='Paid')),
+                unpaid_count=Count('id', filter=models.Q(payment_status='Unpaid'))
+            ).order_by('-month')
+            
+            report_data = [
+                {
+                    "month": item['month'].strftime('%Y-%m') if item['month'] else None,
+                    "month_name": item['month'].strftime('%B %Y') if item['month'] else None,
+                    "total_revenue": float(item['total_revenue'] or 0),
+                    "total_sales": item['total_sales'] or 0,
+                    "paid_count": item['paid_count'] or 0,
+                    "unpaid_count": item['unpaid_count'] or 0,
+                    "average_sale": float(item['total_revenue'] or 0) / (item['total_sales'] or 1)
+                }
+                for item in monthly_data
+            ]
+            
+            return Response({
+                "report_type": "monthly",
+                "report_data": report_data,
+                "total_months": len(report_data),
+                "filters": {
+                    "start_date": start_date_str,
+                    "end_date": end_date_str,
+                    "payment_method": payment_method,
+                    "payment_status": payment_status
+                }
+            })
+        
+        else:
+            # Default: Detailed sales report
+            sales_list = []
+            for sale in qs:
+                customer_name = sale.order.user.username if sale.order and sale.order.user else "N/A"
+                order_items = []
+                if sale.order and hasattr(sale.order, 'items'):
+                    for item in sale.order.items.all():
+                        order_items.append({
+                            "product_name": item.product.name if item.product else "Unknown",
+                            "quantity": item.quantity,
+                            "price": float(item.price_at_purchase),
+                            "subtotal": float(item.subtotal)
+                        })
+                
+                sales_list.append({
+                    "sale_id": sale.id,
+                    "order_id": sale.order.id if sale.order else None,
+                    "customer": customer_name,
+                    "payment_date": sale.payment_date.isoformat() if sale.payment_date else None,
+                    "payment_method": sale.payment_method,
+                    "payment_status": sale.payment_status,
+                    "total_amount": float(sale.total_paid),
+                    "payment_reference": sale.payment_reference or "",
+                    "handled_by": sale.handled_by.username if sale.handled_by else "System",
+                    "notes": sale.notes or "",
+                    "items": order_items
+                })
+            
+            # Calculate summary statistics
+            totals = qs.aggregate(
+                total_revenue=Sum('total_paid'),
+                total_sales=Count('id'),
+                paid_count=Count('id', filter=models.Q(payment_status='Paid')),
+                unpaid_count=Count('id', filter=models.Q(payment_status='Unpaid'))
+            )
+            
+            return Response({
+                "report_type": "sales",
+                "report_data": sales_list,
+                "summary": {
+                    "total_revenue": float(totals["total_revenue"] or 0),
+                    "total_sales": totals["total_sales"] or 0,
+                    "paid_count": totals["paid_count"] or 0,
+                    "unpaid_count": totals["unpaid_count"] or 0,
+                    "average_sale": float(totals["total_revenue"] or 0) / (totals["total_sales"] or 1)
+                },
+                "filters": {
+                    "start_date": start_date_str,
+                    "end_date": end_date_str,
+                    "payment_method": payment_method,
+                    "payment_status": payment_status
+                }
+            })
+
+    @action(detail=True, methods=["get"])
+    def receipt(self, request, pk=None):  # pylint: disable=unused-argument
+        """
+        Returns receipt data for a specific sale.
+        Includes all necessary information for generating an official receipt.
+        """
+        sale = get_object_or_404(Sale, pk=pk)
+        
+        # Get order details
+        order = sale.order
+        customer_name = order.user.get_full_name() if order.user else order.user.username if order.user else "Customer"
+        customer_email = order.user.email if order.user else None
+        
+        # Get order items
+        order_items = []
+        total_amount = 0
+        if hasattr(order, 'items'):
+            for item in order.items.all():
+                item_data = {
+                    "product_name": item.product.name if item.product else "Unknown Product",
+                    "quantity": item.quantity,
+                    "unit_price": float(item.price_at_purchase),
+                    "subtotal": float(item.subtotal)
+                }
+                order_items.append(item_data)
+                total_amount += item_data["subtotal"]
+        
+        # Format receipt data
+        receipt_data = {
+            "receipt_number": f"RCP-{sale.id:06d}",
+            "sale_id": sale.id,
+            "order_id": order.id,
+            "date": sale.payment_date.isoformat() if sale.payment_date else None,
+            "date_formatted": sale.payment_date.strftime("%B %d, %Y %I:%M %p") if sale.payment_date else None,
+            "customer": {
+                "name": customer_name,
+                "email": customer_email,
+                "username": order.user.username if order.user else "N/A"
+            },
+            "items": order_items,
+            "subtotal": float(total_amount),
+            "total": float(sale.total_paid),
+            "payment_method": sale.payment_method,
+            "payment_status": sale.payment_status,
+            "payment_reference": sale.payment_reference or "",
+            "handled_by": sale.handled_by.get_full_name() if sale.handled_by else (sale.handled_by.username if sale.handled_by else "System"),
+            "notes": sale.notes or ""
+        }
+        
+        return Response(receipt_data)
 
 
 class ProductionBatchViewSet(viewsets.ModelViewSet):
