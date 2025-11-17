@@ -17,6 +17,7 @@ from .views import (
     ProductionWindowConfigView,
     CreateCheckoutSessionAPIView,
     PaymongoWebhookAPIView,
+    orders_summary,
 )
 
 router = DefaultRouter()
@@ -34,8 +35,9 @@ router.register(r'production-batches', ProductionBatchViewSet, basename='product
 router.register(r'production-batch-orders', ProductionBatchOrderViewSet, basename='production-batch-orders')
 router.register(r'production-consumptions', IngredientConsumptionViewSet, basename='production-consumptions')
 
-urlpatterns = router.urls + [
+urlpatterns = [
     path('create-checkout-session/', CreateCheckoutSessionAPIView.as_view(), name='create-checkout-session'),
     path('webhook/paymongo/', PaymongoWebhookAPIView, name='paymongo-webhook-new'),
     path('production/window-config/', ProductionWindowConfigView.as_view(), name='production-window-config'),
-]
+    path('orders/summary/', orders_summary, name='orders-summary'),
+] + router.urls

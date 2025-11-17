@@ -1,28 +1,76 @@
-import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
 import { useCart } from "../contexts/CartContext";
 import "./Cart.css";
+import { fetchWithAuth } from "../utils/auth";
 
 const Cart = () => {
   const [promoCode, setPromoCode] = useState("");
+  const [activeProductIds, setActiveProductIds] = useState([]);
   const navigate = useNavigate();
-  const { 
-    cartItems, 
+
+  const {
+    cartItems,
     selectedItems,
-    updateQuantity, 
-    removeFromCart, 
-    clearCart, 
+    updateQuantity,
+    removeFromCart,
+    clearCart,
     toggleItemSelection,
     selectAllItems,
     deselectAllItems,
     isItemSelected,
     getSelectedItems,
-    getSelectedTotal
+    getSelectedTotal,
   } = useCart();
-  const sortedCartItems = [...cartItems].sort((a, b) => a.id - b.id);
+
+  console.log("cartItems:", cartItems);
+
+  // Filter cart items to only ACTIVE products.
+  // While activeProductIds is still empty (initial load), show all items to avoid empty flicker.
+  const filteredCartItems =
+    activeProductIds.length === 0
+      ? cartItems
+      : cartItems.filter((item) => {
+          const productId = Number(
+            item.product_id ?? item.product?.id ?? item.id
+          );
+          return activeProductIds.includes(productId);
+        });
+
+  const sortedCartItems = [...filteredCartItems].sort((a, b) => a.id - b.id);
+
+  useEffect(() => {
+    const loadActiveProducts = async () => {
+      try {
+        const res = await fetchWithAuth(
+          `${import.meta.env.VITE_INVENTORY_URL}/products/`
+        );
+        const data = await res.json();
+
+        // Frontend filter: only keep products with status === "Active"
+        const activeIds = (Array.isArray(data) ? data : []).reduce(
+          (acc, product) => {
+            if (product.status === "Active") {
+              acc.push(product.id);
+            }
+            return acc;
+          },
+          []
+        );
+
+        setActiveProductIds(activeIds);
+        console.log("activeProductIds (frontend-filtered):", activeIds);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+        setActiveProductIds([]); // fallback – show all if something goes wrong
+      }
+    };
+
+    loadActiveProducts();
+  }, []); // only on mount; reload page after changing product status
 
   const handleUpdateQuantity = (id, change) => {
-    const item = cartItems.find(item => item.id === id);
+    const item = cartItems.find((item) => item.id === id);
     if (item) {
       updateQuantity(id, item.quantity + change);
     }
@@ -47,7 +95,6 @@ const Cart = () => {
       alert("Please select items to checkout");
       return;
     }
-    // navigate to the dedicated checkout page (checkout logic moved there)
     navigate("/checkout");
   };
 
@@ -58,24 +105,31 @@ const Cart = () => {
         <div className="cart-header">
           <div className="cart-title-section">
             <h1 className="cart-title">Shopping Cart</h1>
-            <p className="cart-subtitle">Review your order and proceed to checkout</p>
+            <p className="cart-subtitle">
+              Review your order and proceed to checkout
+            </p>
             <div className="cart-header-buttons">
-              <button 
+              <button
                 className="view-orders-btn"
-                onClick={() => navigate('/orders')}
+                onClick={() => navigate("/orders")}
                 title="View your order history"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 12l2 2 4-4"/>
-                  <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
-                  <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
-                  <path d="M12 3v6"/>
-                  <path d="M12 15v6"/>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M9 12l2 2 4-4" />
+                  <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3" />
+                  <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3" />
+                  <path d="M12 3v6" />
+                  <path d="M12 15v6" />
                 </svg>
                 View Orders
               </button>
-              {cartItems.length > 0 && (
-                <button 
+              {sortedCartItems.length > 0 && (
+                <button
                   className="reset-cart-btn"
                   onClick={clearCart}
                   title="Clear all items from cart"
@@ -84,27 +138,28 @@ const Cart = () => {
                 </button>
               )}
             </div>
-            
+
             {/* Selection Controls */}
-            {cartItems.length > 0 && (
+            {sortedCartItems.length > 0 && (
               <div className="cart-selection-controls">
                 <div className="selection-info">
                   <span className="selection-text">
-                    {selectedItemsList.length} of {cartItems.length} items selected
+                    {selectedItemsList.length} of {sortedCartItems.length} items
+                    selected
                   </span>
                   <span className="selection-total">
                     Total: ₱{total.toFixed(2)}
                   </span>
                 </div>
                 <div className="selection-buttons">
-                  <button 
+                  <button
                     className="select-all-btn"
                     onClick={selectAllItems}
-                    disabled={selectedItems.size === cartItems.length}
+                    disabled={selectedItems.size === sortedCartItems.length}
                   >
                     Select All
                   </button>
-                  <button 
+                  <button
                     className="deselect-all-btn"
                     onClick={deselectAllItems}
                     disabled={selectedItems.size === 0}
@@ -120,23 +175,35 @@ const Cart = () => {
         <div className="cart-grid">
           {/* Cart Items */}
           <div className="cart-items-section">
-            {cartItems.length === 0 ? (
+            {sortedCartItems.length === 0 ? (
               <div className="empty-cart">
                 <div className="empty-cart-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="9" cy="21" r="1"/>
-                    <circle cx="20" cy="21" r="1"/>
-                    <path d="m1 1 4 4 13 0 4 14H6l-2-4H1"/>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="9" cy="21" r="1" />
+                    <circle cx="20" cy="21" r="1" />
+                    <path d="m1 1 4 4 13 0 4 14H6l-2-4H1" />
                   </svg>
                 </div>
                 <h3 className="empty-cart-title">Your cart is empty</h3>
-                <p className="empty-cart-subtitle">Add some delicious noodles to get started!</p>
+                <p className="empty-cart-subtitle">
+                  Add some delicious noodles to get started!
+                </p>
                 <div className="empty-cart-buttons">
                   <Link to="/" className="browse-products-btn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                      <polyline points="3.27,6.96 12,12.01 20.73,6.96"/>
-                      <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27,6.96 12,12.01 20.73,6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
                     </svg>
                     Browse Products
                   </Link>
@@ -146,12 +213,21 @@ const Cart = () => {
               <>
                 <div className="cart-items-card">
                   <div className="cart-items-header">
-                    <h2 className="cart-items-title">Cart Items ({cartItems.length})</h2>
-                    <p className="cart-items-description">Manage quantities and view product details</p>
+                    <h2 className="cart-items-title">
+                      Cart Items ({sortedCartItems.length})
+                    </h2>
+                    <p className="cart-items-description">
+                      Manage quantities and view product details
+                    </p>
                   </div>
                   <div className="cart-items-content">
                     {sortedCartItems.map((item) => (
-                      <div key={item.id} className={`cart-item ${isItemSelected(item.id) ? 'selected' : ''}`}>
+                      <div
+                        key={item.id}
+                        className={`cart-item ${
+                          isItemSelected(item.id) ? "selected" : ""
+                        }`}
+                      >
                         <div className="cart-item-checkbox">
                           <input
                             type="checkbox"
@@ -160,7 +236,10 @@ const Cart = () => {
                             onChange={() => toggleItemSelection(item.id)}
                             className="item-checkbox"
                           />
-                          <label htmlFor={`item-${item.id}`} className="checkbox-label"></label>
+                          <label
+                            htmlFor={`item-${item.id}`}
+                            className="checkbox-label"
+                          ></label>
                         </div>
                         <img
                           src={item.image || "/placeholder.svg"}
@@ -171,18 +250,25 @@ const Cart = () => {
                           <div className="cart-item-header">
                             <div className="cart-item-info">
                               <h3 className="cart-item-name">{item.name}</h3>
-                              <p className="cart-item-category">{item.category}</p>
+                              <p className="cart-item-category">
+                                {item.category}
+                              </p>
                             </div>
-                            <button 
-                              className="remove-item-btn" 
+                            <button
+                              className="remove-item-btn"
                               onClick={() => handleRemoveItem(item.id)}
                               title="Remove item"
                             >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="3,6 5,6 21,6"/>
-                                <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2"/>
-                                <line x1="10" y1="11" x2="10" y2="17"/>
-                                <line x1="14" y1="11" x2="14" y2="17"/>
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <polyline points="3,6 5,6 21,6" />
+                                <path d="m19,6v14a2,2 0 0,1 -2,2H7a2,2 0 0,1 -2,-2V6m3,0V4a2,2 0 0,1 2,-2h4a2,2 0 0,1 2,2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
                               </svg>
                             </button>
                           </div>
@@ -192,11 +278,23 @@ const Cart = () => {
                               <div className="quantity-selector">
                                 <button
                                   className="quantity-btn"
-                                  onClick={() => handleUpdateQuantity(item.id, -1)}
+                                  onClick={() =>
+                                    handleUpdateQuantity(item.id, -1)
+                                  }
                                   disabled={item.quantity <= 1}
                                 >
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="5" y1="12" x2="19" y2="12"/>
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <line
+                                      x1="5"
+                                      y1="12"
+                                      x2="19"
+                                      y2="12"
+                                    />
                                   </svg>
                                 </button>
                                 <input
@@ -211,18 +309,41 @@ const Cart = () => {
                                     padding: "2px 4px",
                                     fontSize: "1rem",
                                   }}
-                                  onChange={e => {
-                                    const val = Math.max(1, Math.min(999, Number(e.target.value) || 1));
+                                  onChange={(e) => {
+                                    const val = Math.max(
+                                      1,
+                                      Math.min(
+                                        999,
+                                        Number(e.target.value) || 1
+                                      )
+                                    );
                                     updateQuantity(item.id, val);
                                   }}
                                 />
                                 <button
                                   className="quantity-btn"
-                                  onClick={() => handleUpdateQuantity(item.id, 1)}
+                                  onClick={() =>
+                                    handleUpdateQuantity(item.id, 1)
+                                  }
                                 >
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="12" y1="5" x2="12" y2="19"/>
-                                    <line x1="5" y1="12" x2="19" y2="12"/>
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <line
+                                      x1="12"
+                                      y1="5"
+                                      x2="12"
+                                      y2="19"
+                                    />
+                                    <line
+                                      x1="5"
+                                      y1="12"
+                                      x2="19"
+                                      y2="12"
+                                    />
                                   </svg>
                                 </button>
                               </div>
@@ -230,9 +351,15 @@ const Cart = () => {
 
                             <div className="cart-item-pricing">
                               <p className="cart-item-total">
-                                ₱{(toNumber(item.price) * toNumber(item.quantity)).toFixed(2)}
+                                ₱
+                                {(
+                                  toNumber(item.price) *
+                                  toNumber(item.quantity)
+                                ).toFixed(2)}
                               </p>
-                              <p className="cart-item-unit">₱{toNumber(item.price).toFixed(2)} each</p>
+                              <p className="cart-item-unit">
+                                ₱{toNumber(item.price).toFixed(2)} each
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -240,7 +367,6 @@ const Cart = () => {
                     ))}
                   </div>
                 </div>
-
               </>
             )}
           </div>
@@ -255,38 +381,48 @@ const Cart = () => {
                 <div className="order-summary-details">
                   <div className="order-summary-row">
                     <span className="order-summary-label">Subtotal</span>
-                    <span className="order-summary-value">₱{subtotal.toFixed(2)}</span>
+                    <span className="order-summary-value">
+                      ₱{subtotal.toFixed(2)}
+                    </span>
                   </div>
                   <div className="order-summary-row">
                     <span className="order-summary-label">Tax (12% VAT)</span>
-                    <span className="order-summary-value">₱{tax.toFixed(2)}</span>
+                    <span className="order-summary-value">
+                      ₱{tax.toFixed(2)}
+                    </span>
                   </div>
                   <div className="order-summary-divider"></div>
                   <div className="order-summary-total-row">
                     <span className="order-summary-total-label">Total</span>
-                    <span className="order-summary-total-value">₱{total.toFixed(2)}</span>
+                    <span className="order-summary-total-value">
+                      ₱{total.toFixed(2)}
+                    </span>
                   </div>
                 </div>
 
-                <button 
-                  className="checkout-btn" 
+                <button
+                  className="checkout-btn"
                   onClick={handleCheckout}
                   disabled={selectedItemsList.length === 0}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="9" cy="21" r="1"/>
-                    <circle cx="20" cy="21" r="1"/>
-                    <path d="m1 1 4 4 13 0 4 14H6l-2-4H1"/>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="9" cy="21" r="1" />
+                    <circle cx="20" cy="21" r="1" />
+                    <path d="m1 1 4 4 13 0 4 14H6l-2-4H1" />
                   </svg>
-                  {selectedItemsList.length > 0 
-                    ? `Checkout ${selectedItemsList.length} Item${selectedItemsList.length > 1 ? 's' : ''}`
-                    : 'Select Items to Checkout'
-                  }
+                  {selectedItemsList.length > 0
+                    ? `Checkout ${selectedItemsList.length} Item${
+                        selectedItemsList.length > 1 ? "s" : ""
+                      }`
+                    : "Select Items to Checkout"}
                 </button>
 
-                <div className="order-summary-features">
-
-                </div>
+                <div className="order-summary-features"></div>
               </div>
             </div>
           </div>

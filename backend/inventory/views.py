@@ -72,6 +72,39 @@ from django.db import transaction
 from django.db.models import Sum, Count
 logger = logging.getLogger(__name__)
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def orders_summary(request):
+    date = request.GET.get('date')
+    if not date:
+        return Response({"detail": "Date is required."}, status=400)
+
+    items = (
+        OrderItem.objects
+        .filter(order__created_at__date=date)
+        .values('product')
+        .annotate(total_orders=Sum('quantity'))
+    )
+
+    product_ids = [item['product'] for item in items]
+    products = Product.objects.filter(id__in=product_ids)
+    product_map = {p.id: p for p in products}
+
+    summary = []
+    for item in items:
+        prod = product_map.get(item['product'])
+        if prod:
+            image_url = ""
+            if prod.image:
+                image_url = request.build_absolute_uri(prod.image.url)
+            summary.append({
+                "product_id": prod.id,
+                "product_name": prod.name,
+                "image": image_url,
+                "price": str(prod.price),
+                "total_orders": item['total_orders'] or 0,
+            })
+    return Response(summary)
 
 def append_sale_audit_log(sale, old_status, new_status, user):
     """

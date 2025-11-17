@@ -231,19 +231,10 @@ export default function SalesManagement() {
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
       <div className="max-w-7xl mx-auto px-4 pb-8">
         {/* Header */}
-        <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mt-14 mb-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Sales Management</h1>
             <p className="text-gray-500">Comprehensive sales analytics and reporting</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={exportSalesReport}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-sm"
-            >
-              <Download className="h-4 w-4" />
-              Export Report
-            </button>
           </div>
         </div>
 
@@ -426,7 +417,6 @@ export default function SalesManagement() {
                 >
                   <option value="all">All Payment Methods</option>
                   <option value="COD">Cash on Delivery</option>
-                  <option value="Online">Online Payment</option>
                   <option value="GCash">GCash</option>
                 </select>
                 <select
@@ -437,9 +427,6 @@ export default function SalesManagement() {
                   <option value="all">All Status</option>
                   <option value="Paid">Paid</option>
                   <option value="Unpaid">Unpaid</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Failed">Failed</option>
-                  <option value="Refunded">Refunded</option>
                 </select>
                 <select
                   value={dateFilter}

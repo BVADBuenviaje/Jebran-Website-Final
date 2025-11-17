@@ -709,7 +709,7 @@ const Ingredients = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {ingredient.default_unit_price
-                          ? `$${ingredient.default_unit_price}`
+                          ? `₱${parseFloat(ingredient.default_unit_price).toLocaleString()}`
                           : "—"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -826,7 +826,7 @@ const Ingredients = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Default Unit Price ($)
+                    Default Unit Price (₱)
                   </label>
                   <input
                     name="default_unit_price"

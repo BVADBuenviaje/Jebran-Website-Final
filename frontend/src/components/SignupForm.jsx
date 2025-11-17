@@ -202,6 +202,9 @@ const SignupForm = ({ onSubmit, error, setError, children }) => {
               color: "#bb6653",
             }}
           />
+          <div className="mt-1 text-xs text-gray-500">
+            Only letters, numbers, and @ . + - _ are allowed. <span className="text-red-500">Spaces are not valid.</span>
+          </div>
           {submitted && !form.username && (
             <div className="mt-1 text-red-500 text-sm bg-red-100 p-2 rounded">
               Please enter your username.

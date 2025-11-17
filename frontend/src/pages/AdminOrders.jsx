@@ -77,12 +77,13 @@ export default function AdminOrders() {
       const search = searchTerm.trim().toLowerCase();
       const matchesSearch =
         !search ||
-        order.id.toLowerCase().includes(search) ||
+        order.id.toString().toLowerCase().includes(search) ||
         order.customer.name.toLowerCase().includes(search) ||
-        order.customer.email.toLowerCase().includes(search);
+        order.customer.email.toLowerCase().includes(search) ||
+        order.address.toLowerCase().includes(search);
       const matchesStatus = statusFilter === "all" || order.status.toLowerCase() === statusFilter.toLowerCase();
       const matchesPaymentStatus = paymentStatusFilter === "all" || order.payment_status.toLowerCase() === paymentStatusFilter.toLowerCase();
-      
+
       // Date range filter
       let matchesDateRange = true;
       if (dateFrom || dateTo) {
@@ -106,7 +107,7 @@ export default function AdminOrders() {
           }
         }
       }
-      
+
       return matchesSearch && matchesStatus && matchesPaymentStatus && matchesDateRange;
     });
   }, [searchTerm, statusFilter, paymentStatusFilter, dateFrom, dateTo, orders]);
@@ -210,7 +211,7 @@ export default function AdminOrders() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 mt-20">
+        <div className="flex items-center justify-between mb-8 mt-30">
           <div className="flex items-center gap-4">
             {/* <Link to="/">
               <button className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 text-sm">
@@ -223,7 +224,6 @@ export default function AdminOrders() {
               <p className="text-gray-500">View and manage all customer orders</p>
             </div>
           </div>
-          <button className="px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 text-sm">Export Orders</button>
         </div>
 
         {/* Analytics Cards */}
@@ -277,8 +277,6 @@ export default function AdminOrders() {
                 >
                   <option value="all">All Status</option>
                   <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
                   <option value="delivered">Delivered</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
@@ -290,7 +288,6 @@ export default function AdminOrders() {
                   <option value="all">All Payment Status</option>
                   <option value="paid">Paid</option>
                   <option value="unpaid">Unpaid</option>
-                  <option value="pending">Payment Pending</option>
                 </select>
               </div>
               

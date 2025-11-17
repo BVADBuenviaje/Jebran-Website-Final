@@ -26,6 +26,7 @@ const Products = () => {
     status: "Active",
     ingredients: [],
     image: "",
+    description: "",
   })
   const [allIngredients, setAllIngredients] = useState([])
   const [uploadedFile, setUploadedFile] = useState(null)
@@ -232,6 +233,7 @@ const Products = () => {
       price: product.price ?? "",
       stock: product.stock ?? "",
       status: product.status || "Active",
+      description: product.description || "",
       ingredients: Array.isArray(product.ingredients)
         ? product.ingredients.map((it) => ({
             name: typeof it === 'string' ? it : (it.name || ""),
@@ -355,6 +357,7 @@ const Products = () => {
       formDataToSend.append('name', formData.name.trim())
       formDataToSend.append('price', formData.price === "" ? "" : formData.price)
       formDataToSend.append('status', formData.status)
+      formDataToSend.append('description', formData.description.trim());
       if (uploadedFile) {
         formDataToSend.append('image', uploadedFile)
       }
@@ -661,6 +664,17 @@ const Products = () => {
                     <option value="Inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="w-full border rounded-md px-3 py-2"
+                  rows={3}
+                  placeholder="Enter product description"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
